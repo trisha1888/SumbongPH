@@ -1,15 +1,12 @@
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router'; // Import the router
-import React from 'react';
-import { SafeAreaView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function HomeScreen() {
   const router = useRouter(); // Initialize the router
 
   return (
-    <ThemedView style={styles.container}>
+    <View style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
         
         {/* Logo Section */}
@@ -17,12 +14,12 @@ export default function HomeScreen() {
           <View style={styles.logoIcon}>
             <Ionicons name="chatbubble-outline" size={40} color="white" />
           </View>
-          <ThemedText type="title" style={styles.brandText}>
-            Sumbong <ThemedText style={styles.blueText}>PH</ThemedText>
-          </ThemedText>
-          <ThemedText style={styles.tagline}>
+          <Text style={styles.brandText}>
+            Sumbong <Text style={styles.blueText}>PH</Text>
+          </Text>
+          <Text style={styles.tagline}>
             Your Voice, Your Community's Future.
-          </ThemedText>
+          </Text>
         </View>
 
         {/* Features List */}
@@ -57,19 +54,19 @@ export default function HomeScreen() {
             activeOpacity={0.8}
             onPress={() => router.push('/login')} // Navigates to app/login.tsx
           >
-            <ThemedText style={styles.buttonText}>Get Started</ThemedText>
+            <Text style={styles.buttonText}>Get Started</Text>
           </TouchableOpacity>
           
           <TouchableOpacity 
             style={styles.secondaryButton}
             onPress={() => router.push('/login')} // Usually leads to the same sign-in page
           >
-            <ThemedText style={styles.linkText}>I already have an account</ThemedText>
+            <Text style={styles.linkText}>I already have an account</Text>
           </TouchableOpacity>
         </View>
         
       </SafeAreaView>
-    </ThemedView>
+    </View>
   );
 }
 
@@ -81,8 +78,8 @@ function FeatureItem({ icon, title, desc, iconBg, iconColor }: any) {
         <Ionicons name={icon} size={24} color={iconColor} />
       </View>
       <View style={{ flex: 1 }}>
-        <ThemedText type="defaultSemiBold" style={styles.featureTitle}>{title}</ThemedText>
-        <ThemedText style={styles.featureDesc}>{desc}</ThemedText>
+        <Text style={styles.featureTitle}>{title}</Text>
+        <Text style={styles.featureDesc}>{desc}</Text>
       </View>
     </View>
   );
@@ -92,6 +89,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 25,
+    backgroundColor: '#FFFFFF',
   },
   logoSection: {
     alignItems: 'center',

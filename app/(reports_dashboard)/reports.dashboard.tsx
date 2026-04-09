@@ -2,30 +2,31 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
-import React from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { useTheme } from '../ThemeContext';
 
 export default function ReportsDashboard() {
   const router = useRouter();
+  const { isDarkMode } = useTheme();
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container, isDarkMode && styles.darkContainer]}>
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.content}>
-          <ThemedText style={styles.pageTitle}>My Reports</ThemedText>
+          <ThemedText style={[styles.pageTitle, isDarkMode && styles.darkText]}>My Reports</ThemedText>
 
           <View style={styles.searchRow}>
-            <View style={styles.searchBar}>
+            <View style={[styles.searchBar, isDarkMode && styles.darkCard]}>
               <Ionicons name="search-outline" size={20} color="#9CA3AF" />
               <TextInput 
                 placeholder="Search reports..." 
                 placeholderTextColor="#9CA3AF"
-                style={styles.searchInput} 
+                style={[styles.searchInput, isDarkMode && styles.darkText]} 
               />
             </View>
-            <TouchableOpacity style={styles.filterButton}>
+            <TouchableOpacity style={[styles.filterButton, isDarkMode && styles.darkCard]}>
               <Ionicons name="filter-outline" size={22} color="#4B5563" />
             </TouchableOpacity>
           </View>
@@ -72,7 +73,7 @@ export default function ReportsDashboard() {
           <Ionicons name="add" size={32} color="white" />
         </TouchableOpacity>
 
-        <View style={styles.tabBar}>
+        <View style={[styles.tabBar, isDarkMode && styles.darkCard]}>
           <TabIcon icon="home-outline" label="Home" onPress={() => router.push('/(home_dasborad)/home.dashboard')} />
           <TabIcon icon="document-text" label="Reports" active onPress={() => router.push('/(reports_dashboard)/reports.dashboard')} />
           <TabIcon icon="map-outline" label="Maps" onPress={() => router.push('/(maps.dashboard)/maps.dashboard')} />
@@ -87,22 +88,24 @@ export default function ReportsDashboard() {
 // ... ReportCard and TabIcon components remain the same as your original file
 
 function ReportCard({ title, status, id, desc, location, date, icon, statusBlue, statusGreen }: any) {
+  const { isDarkMode } = useTheme();
+
   return (
-    <View style={styles.reportCard}>
+    <View style={[styles.reportCard, isDarkMode && styles.darkCard]}>
        <View style={styles.reportRow}>
           <View style={styles.iconBg}><Ionicons name={icon} size={22} color="#4B5563" /></View>
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <ThemedText style={styles.reportMainTitle}>{title}</ThemedText>
-            <ThemedText style={styles.reportId}>ID: {id}</ThemedText>
+            <ThemedText style={[styles.reportMainTitle, isDarkMode && styles.darkText]}>{title}</ThemedText>
+            <ThemedText style={[styles.reportId, isDarkMode && styles.darkSubText]}>ID: {id}</ThemedText>
           </View>
           <View style={[styles.statusBadge, statusBlue && {backgroundColor: '#DBEAFE'}, statusGreen && {backgroundColor: '#DCFCE7'}]}>
             <ThemedText style={[styles.statusText, statusBlue && {color: '#2563EB'}, statusGreen && {color: '#16A34A'}]}>{status}</ThemedText>
           </View>
        </View>
-       <ThemedText style={styles.reportSnippet}>{desc}</ThemedText>
+       <ThemedText style={[styles.reportSnippet, isDarkMode && styles.darkSubText]}>{desc}</ThemedText>
        <View style={styles.reportFooter}>
-         <View style={styles.footerInfo}><Ionicons name="location-outline" size={14} color="#9CA3AF" /><ThemedText style={styles.footerLabel}>{location}</ThemedText></View>
-         <View style={styles.footerInfo}><Ionicons name="time-outline" size={14} color="#9CA3AF" /><ThemedText style={styles.footerLabel}>{date}</ThemedText></View>
+         <View style={styles.footerInfo}><Ionicons name="location-outline" size={14} color="#9CA3AF" /><ThemedText style={[styles.footerLabel, isDarkMode && styles.darkSubText]}>{location}</ThemedText></View>
+         <View style={styles.footerInfo}><Ionicons name="time-outline" size={14} color="#9CA3AF" /><ThemedText style={[styles.footerLabel, isDarkMode && styles.darkSubText]}>{date}</ThemedText></View>
        </View>
     </View>
   );
@@ -119,6 +122,10 @@ function TabIcon({ icon, label, active, onPress }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFF' },
+  darkContainer: { backgroundColor: '#111827' },
+  darkCard: { backgroundColor: '#1F2937', borderColor: '#374151' },
+  darkText: { color: '#F9FAFB' },
+  darkSubText: { color: '#9CA3AF' },
   content: { paddingHorizontal: 20, flex: 1 },
   pageTitle: { fontSize: 24, fontWeight: '800', color: '#111827', marginTop: 20, marginBottom: 15 },
   searchRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },

@@ -4,15 +4,16 @@ import { auth, db } from '@/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import { useTheme } from '../ThemeContext';
 
 type UserProfile = {
   uid?: string;
@@ -25,6 +26,7 @@ type UserProfile = {
 
 export default function Dashboard() {
   const router = useRouter();
+  const { isDarkMode } = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -94,15 +96,15 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <ThemedView style={styles.loadingContainer}>
+      <ThemedView style={[styles.loadingContainer, isDarkMode && styles.darkContainer]}>
         <ActivityIndicator size="large" color="#2F70E9" />
-        <ThemedText style={styles.loadingText}>Loading dashboard...</ThemedText>
+        <ThemedText style={[styles.loadingText, isDarkMode && styles.darkSubText]}>Loading dashboard...</ThemedText>
       </ThemedView>
     );
   }
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container, isDarkMode && styles.darkContainer]}>
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={{ flex: 1 }}>
@@ -113,11 +115,11 @@ export default function Dashboard() {
           {/* Header Section */}
           <View style={styles.header}>
             <View>
-              <ThemedText style={styles.welcomeLabel}>Welcome back,</ThemedText>
-              <ThemedText style={styles.userName}>
+              <ThemedText style={[styles.welcomeLabel, isDarkMode && styles.darkSubText]}>Welcome back,</ThemedText>
+              <ThemedText style={[styles.userName, isDarkMode && styles.darkText]}>
                 {userProfile?.name || 'User'}
               </ThemedText>
-              <ThemedText style={styles.userBarangay}>
+              <ThemedText style={[styles.userBarangay, isDarkMode && styles.darkSubText]}>
                 {userProfile?.barangay || 'No barangay set'}
               </ThemedText>
             </View>
@@ -142,9 +144,9 @@ export default function Dashboard() {
 
           {/* Stats Row */}
           <View style={styles.row}>
-            <View style={styles.statBox}>
+            <View style={[styles.statBox, isDarkMode && styles.darkCard]}>
               <View style={styles.statHeader}>
-                <ThemedText style={styles.statTitle}>Pending</ThemedText>
+                <ThemedText style={[styles.statTitle, isDarkMode && styles.darkSubText]}>Pending</ThemedText>
                 <View
                   style={[styles.statIconWrap, { backgroundColor: '#FFF7ED' }]}
                 >
@@ -154,9 +156,9 @@ export default function Dashboard() {
               <ThemedText style={styles.statNumber}>0</ThemedText>
             </View>
 
-            <View style={styles.statBox}>
+            <View style={[styles.statBox, isDarkMode && styles.darkCard]}>
               <View style={styles.statHeader}>
-                <ThemedText style={styles.statTitle}>Resolved</ThemedText>
+                <ThemedText style={[styles.statTitle, isDarkMode && styles.darkSubText]}>Resolved</ThemedText>
                 <View
                   style={[styles.statIconWrap, { backgroundColor: '#F0FDF4' }]}
                 >
@@ -195,33 +197,33 @@ export default function Dashboard() {
 
           {/* Recent Reports Section */}
           <View style={styles.sectionHeader}>
-            <ThemedText style={styles.sectionTitle}>Recent Reports</ThemedText>
+            <ThemedText style={[styles.sectionTitle, isDarkMode && styles.darkText]}>Recent Reports</ThemedText>
             <TouchableOpacity
               onPress={() =>
                 router.push('/(reports_dashboard)/reports.dashboard')
               }
             >
-              <ThemedText style={styles.viewAll}>View All</ThemedText>
+              <ThemedText style={[styles.viewAll, isDarkMode && styles.darkText]}>View All</ThemedText>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.reportCard}>
+          <View style={[styles.reportCard, isDarkMode && styles.darkCard]}>
             <View style={styles.reportRow}>
               <View style={styles.iconBg}>
                 <Ionicons name="document-text-outline" size={22} color="#4B5563" />
               </View>
 
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <ThemedText style={styles.reportMainTitle}>
+                <ThemedText style={[styles.reportMainTitle, isDarkMode && styles.darkText]}>
                   No reports yet
                 </ThemedText>
-                <ThemedText style={styles.reportId}>
+                <ThemedText style={[styles.reportId, isDarkMode && styles.darkSubText]}>
                   Start by creating your first report.
                 </ThemedText>
               </View>
 
-              <View style={styles.statusBadge}>
-                <ThemedText style={styles.statusText}>NEW</ThemedText>
+              <View style={[styles.statusBadge, isDarkMode && styles.darkCard]}>
+                <ThemedText style={[styles.statusText, isDarkMode && styles.darkSubText]}>NEW</ThemedText>
               </View>
             </View>
           </View>
@@ -237,7 +239,7 @@ export default function Dashboard() {
         </TouchableOpacity>
 
         {/* Bottom Tab Bar */}
-        <View style={styles.tabBar}>
+        <View style={[styles.tabBar, isDarkMode && styles.darkCard]}>
           <TabIcon
             icon="home"
             label="Home"
@@ -300,6 +302,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  darkContainer: { backgroundColor: '#111827' },
+  darkCard: { backgroundColor: '#1F2937', borderColor: '#374151' },
+  darkText: { color: '#F9FAFB' },
+  darkSubText: { color: '#9CA3AF' },
   loadingText: {
     marginTop: 12,
     color: '#6B7280',

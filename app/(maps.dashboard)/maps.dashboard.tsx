@@ -2,27 +2,28 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
-import React from 'react';
 import { Dimensions, SafeAreaView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useTheme } from '../ThemeContext';
 
 const { width, height } = Dimensions.get('window');
 
 export default function MapDashboard() {
   const router = useRouter();
+  const { isDarkMode } = useTheme();
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container, isDarkMode && styles.darkContainer]}>
       {/* Removes the (maps_dashboard)/maps.dashboard header */}
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={{ flex: 1 }}>
         {/* Map Header */}
-        <View style={styles.mapHeader}>
-          <ThemedText style={styles.headerTitle}>Map</ThemedText>
+        <View style={[styles.mapHeader, isDarkMode && styles.darkHeader]}>
+          <ThemedText style={[styles.headerTitle, isDarkMode && styles.darkText]}>Map</ThemedText>
         </View>
 
         {/* Mock Map Canvas */}
-        <View style={styles.mapCanvas}>
+        <View style={[styles.mapCanvas, isDarkMode && styles.darkMapCanvas]}>
           {/* Garbage Pin */}
           <MapPin 
             icon="location" 
@@ -54,7 +55,7 @@ export default function MapDashboard() {
         </View>
 
         {/* Bottom Navigation */}
-        <View style={styles.tabBar}>
+        <View style={[styles.tabBar, isDarkMode && styles.darkTabBar]}>
           <TabIcon icon="home-outline" label="Home" onPress={() => router.push('/(home_dasborad)/home.dashboard')} />
           <TabIcon icon="document-text-outline" label="Reports" onPress={() => router.push('/(reports_dashboard)/reports.dashboard')} />
           <TabIcon icon="map" label="Maps" active onPress={() => router.push('/(maps.dashboard)/maps.dashboard')} />
@@ -68,8 +69,10 @@ export default function MapDashboard() {
 
 // Map Pin Component
 function MapPin({ icon, label, color, top, left, isLarge }: any) {
+  const { isDarkMode } = useTheme();
+
   return (
-    <View style={[styles.pinContainer, { top, left }]}>
+    <View style={[styles.pinContainer, { top, left }]}> 
       <View style={[
         styles.pinCircle, 
         { backgroundColor: color },
@@ -78,7 +81,7 @@ function MapPin({ icon, label, color, top, left, isLarge }: any) {
         {isLarge && <View style={[styles.pulseRing, { borderColor: color }]} />}
         <Ionicons name={icon} size={isLarge ? 24 : 18} color="white" />
       </View>
-      <ThemedText style={styles.pinLabel}>{label}</ThemedText>
+      <ThemedText style={[styles.pinLabel, isDarkMode && styles.darkSubText]}>{label}</ThemedText>
     </View>
   );
 }
@@ -105,5 +108,9 @@ const styles = StyleSheet.create({
   pinLabel: { fontSize: 10, color: '#6B7280', marginTop: 4, fontWeight: '600', textTransform: 'lowercase' },
   tabBar: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 85, backgroundColor: 'white', flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingBottom: 20 },
   tabItem: { alignItems: 'center' },
-  tabLabel: { fontSize: 11, marginTop: 4, fontWeight: '600' }
+  tabLabel: { fontSize: 11, marginTop: 4, fontWeight: '600' },
+  darkHeader: { backgroundColor: '#111827', borderBottomWidth: 1, borderBottomColor: '#374151' },
+  darkMapCanvas: { backgroundColor: '#0F172A' },
+  darkTabBar: { backgroundColor: '#111827', borderTopColor: '#374151' },
+  darkContainer: { backgroundColor: '#0F172A' }
 });

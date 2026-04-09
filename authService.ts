@@ -1,11 +1,12 @@
-import { auth, db } from './firebaseConfig';
 import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  sendEmailVerification,
-  deleteUser,
+    createUserWithEmailAndPassword,
+    deleteUser,
+    sendEmailVerification,
+    signInWithEmailAndPassword,
+    signOut,
 } from 'firebase/auth';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from './firebaseConfig';
 
 export const registerUser = async (
   email: string,
@@ -57,4 +58,8 @@ export const loginUser = async (email: string, password: string) => {
     password
   );
   return userCredential.user;
+};
+
+export const logoutUser = async () => {
+  await signOut(auth);
 };

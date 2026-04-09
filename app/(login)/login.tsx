@@ -1,19 +1,18 @@
 import { auth } from '@/firebaseConfig';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 export default function LoginScreen() {
@@ -76,7 +75,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
+    <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
       <KeyboardAvoidingView
@@ -86,24 +85,24 @@ export default function LoginScreen() {
         <SafeAreaView style={{ flex: 1 }}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={() => router.replace('/(tabs)')}
             disabled={loading}
           >
             <Ionicons name="arrow-back" size={28} color="#111827" />
           </TouchableOpacity>
 
           <View style={styles.header}>
-            <ThemedText type="title" style={styles.title}>
+            <Text style={styles.title}>
               Welcome Back
-            </ThemedText>
-            <ThemedText style={styles.subtitle}>
+            </Text>
+            <Text style={styles.subtitle}>
               Sign in to continue reporting issues.
-            </ThemedText>
+            </Text>
           </View>
 
           <View style={styles.form}>
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Email Address</ThemedText>
+              <Text style={styles.label}>Email Address</Text>
               <TextInput
                 style={styles.input}
                 placeholder="name@example.com"
@@ -118,7 +117,7 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Password</ThemedText>
+              <Text style={styles.label}>Password</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Enter your password"
@@ -129,7 +128,7 @@ export default function LoginScreen() {
                 editable={!loading}
               />
               <TouchableOpacity style={styles.forgotPassword} disabled={loading}>
-                <ThemedText style={styles.blueLinkText}>Forgot Password?</ThemedText>
+                <Text style={styles.blueLinkText}>Forgot Password?</Text>
               </TouchableOpacity>
             </View>
 
@@ -138,26 +137,26 @@ export default function LoginScreen() {
               onPress={handleLogin}
               disabled={loading}
             >
-              <ThemedText style={styles.buttonText}>
+              <Text style={styles.buttonText}>
                 {loading ? 'Signing In...' : 'Sign In'}
-              </ThemedText>
+              </Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.footer}>
-            <ThemedText style={styles.footerText}>
+            <Text style={styles.footerText}>
               Don't have an account?{' '}
-              <ThemedText
+              <Text
                 style={styles.linkText}
                 onPress={() => router.push('/signup')}
               >
                 Sign Up
-              </ThemedText>
-            </ThemedText>
+              </Text>
+            </Text>
           </View>
         </SafeAreaView>
       </KeyboardAvoidingView>
-    </ThemedView>
+    </View>
   );
 }
 
@@ -165,6 +164,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 25,
+    backgroundColor: '#FFFFFF',
   },
   backButton: {
     marginTop: 10,

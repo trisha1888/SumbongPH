@@ -2,20 +2,22 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useTheme } from '../ThemeContext';
 
 export default function IdeasDashboard() {
   const router = useRouter();
+  const { isDarkMode } = useTheme();
   const [filter, setFilter] = useState('Popular');
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container, isDarkMode && styles.darkContainer]}>
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.header}>
-          <ThemedText style={styles.headerTitle}>Community Suggestions</ThemedText>
+          <ThemedText style={[styles.headerTitle, isDarkMode && styles.darkText]}>Community Suggestions</ThemedText>
           {/* New Button also pointing to Category Selection */}
           <TouchableOpacity 
             style={styles.newButton} 
@@ -26,7 +28,7 @@ export default function IdeasDashboard() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.filterContainer}>
+        <View style={[styles.filterContainer, isDarkMode && styles.darkCard]}>
           <TouchableOpacity 
             style={[styles.filterTab, filter === 'Popular' && styles.activeFilterTab]} 
             onPress={() => setFilter('Popular')}
@@ -55,7 +57,7 @@ export default function IdeasDashboard() {
           <Ionicons name="add" size={32} color="white" />
         </TouchableOpacity>
 
-        <View style={styles.tabBar}>
+        <View style={[styles.tabBar, isDarkMode && styles.darkCard]}>
           <TabIcon icon="home-outline" label="Home" onPress={() => router.push('/(home_dasborad)/home.dashboard')} />
           <TabIcon icon="document-text-outline" label="Reports" onPress={() => router.push('/(reports_dashboard)/reports.dashboard')} />
           <TabIcon icon="map-outline" label="Maps" onPress={() => router.push('/(maps.dashboard)/maps.dashboard')} />
@@ -68,25 +70,27 @@ export default function IdeasDashboard() {
 }
 
 function IdeaCard({ author, time, title, desc, likes, comments, status, statusColor, textColor }: any) {
+  const { isDarkMode } = useTheme();
+
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, isDarkMode && styles.darkCard]}>
       <View style={styles.cardHeader}>
         <View style={styles.userInfo}>
           <View style={styles.avatarPlaceholder}><ThemedText style={styles.avatarText}>{author.charAt(0)}</ThemedText></View>
-          <View><ThemedText style={styles.userName}>{author}</ThemedText><ThemedText style={styles.timeText}>{time}</ThemedText></View>
+          <View><ThemedText style={[styles.userName, isDarkMode && styles.darkText]}>{author}</ThemedText><ThemedText style={[styles.timeText, isDarkMode && styles.darkSubText]}>{time}</ThemedText></View>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+        <View style={[styles.statusBadge, { backgroundColor: statusColor }]}> 
           <ThemedText style={[styles.statusText, { color: textColor }]}>{status}</ThemedText>
         </View>
       </View>
-      <ThemedText style={styles.ideaTitle}>{title}</ThemedText>
-      <ThemedText style={styles.ideaDesc}>{desc}</ThemedText>
+      <ThemedText style={[styles.ideaTitle, isDarkMode && styles.darkText]}>{title}</ThemedText>
+      <ThemedText style={[styles.ideaDesc, isDarkMode && styles.darkSubText]}>{desc}</ThemedText>
       <View style={styles.cardFooter}>
         <View style={styles.stats}>
-          <View style={styles.statItem}><Ionicons name="thumbs-up-outline" size={20} color="#6B7280" /><ThemedText style={styles.statText}>{likes}</ThemedText></View>
-          <View style={styles.statItem}><Ionicons name="chatbubble-outline" size={20} color="#6B7280" /><ThemedText style={styles.statText}>{comments}</ThemedText></View>
+          <View style={styles.statItem}><Ionicons name="thumbs-up-outline" size={20} color="#6B7280" /><ThemedText style={[styles.statText, isDarkMode && styles.darkSubText]}>{likes}</ThemedText></View>
+          <View style={styles.statItem}><Ionicons name="chatbubble-outline" size={20} color="#6B7280" /><ThemedText style={[styles.statText, isDarkMode && styles.darkSubText]}>{comments}</ThemedText></View>
         </View>
-        <TouchableOpacity><ThemedText style={styles.readMore}>Read more</ThemedText></TouchableOpacity>
+        <TouchableOpacity><ThemedText style={[styles.readMore, isDarkMode && styles.darkText]}>Read more</ThemedText></TouchableOpacity>
       </View>
     </View>
   );
@@ -103,11 +107,19 @@ function TabIcon({ icon, label, active, onPress }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
+  darkContainer: { backgroundColor: '#111827' },
+  darkCard: { backgroundColor: '#1F2937', borderColor: '#374151' },
+  darkText: { color: '#F9FAFB' },
+  darkSubText: { color: '#9CA3AF' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20 },
   headerTitle: { fontSize: 22, fontWeight: '800', color: '#111827' },
   newButton: { backgroundColor: '#2F70E9', flexDirection: 'row', alignItems: 'center', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 10, gap: 4 },
   newButtonText: { color: 'white', fontWeight: '700' },
   filterContainer: { flexDirection: 'row', backgroundColor: '#F3F4F6', marginHorizontal: 20, borderRadius: 12, padding: 4, marginBottom: 15 },
+  darkContainer: { backgroundColor: '#111827' },
+  darkCard: { backgroundColor: '#1F2937', borderColor: '#374151' },
+  darkText: { color: '#F9FAFB' },
+  darkSubText: { color: '#9CA3AF' },
   filterTab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
   activeFilterTab: { backgroundColor: 'white', elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 3 },
   filterText: { color: '#6B7280', fontWeight: '600' },

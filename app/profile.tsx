@@ -5,15 +5,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  SafeAreaView,
-  StyleSheet,
-  Switch,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    SafeAreaView,
+    StyleSheet,
+    Switch,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 import { useTheme } from './ThemeContext';
@@ -83,26 +83,13 @@ export default function ProfileScreen() {
     fetchUserProfile();
   }, []);
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out of your account?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await signOut(auth);
-              router.replace('/login');
-            } catch (error) {
-              Alert.alert('Error', 'Unable to log out right now.');
-            }
-          },
-        },
-      ]
-    );
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      router.replace('/login');
+    } catch (error) {
+      Alert.alert('Error', 'Unable to log out right now.');
+    }
   };
 
   const handleEditProfile = () => {
@@ -141,6 +128,15 @@ export default function ProfileScreen() {
 
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.content}>
+          <TouchableOpacity
+            style={styles.topLogoutButton}
+            activeOpacity={0.8}
+            onPress={handleLogout}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Ionicons name="log-out-outline" size={22} color="white" />
+          </TouchableOpacity>
+
           <View style={styles.profileHeader}>
             <View style={styles.avatar}>
               <ThemedText style={styles.avatarText}>
@@ -251,15 +247,6 @@ export default function ProfileScreen() {
               <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={styles.logoutButton}
-            activeOpacity={0.85}
-            onPress={handleLogout}
-          >
-            <Ionicons name="log-out-outline" size={20} color="white" />
-            <ThemedText style={styles.logoutText}>Log Out</ThemedText>
-          </TouchableOpacity>
         </View>
 
         <View style={[styles.tabBar, isDarkMode && styles.darkCard]}>
@@ -315,7 +302,7 @@ const styles = StyleSheet.create({
   darkContainer: { backgroundColor: '#111827' },
   safeArea: { flex: 1 },
   centered: { justifyContent: 'center', alignItems: 'center' },
-  content: { flex: 1, paddingHorizontal: 18, paddingTop: 24, paddingBottom: 110 },
+  content: { flex: 1, paddingHorizontal: 18, paddingTop: 24, paddingBottom: 110, position: 'relative' },
   profileHeader: { alignItems: 'center', marginBottom: 24 },
   avatar: {
     width: 72,
@@ -361,14 +348,22 @@ const styles = StyleSheet.create({
   infoText: { fontSize: 13, color: '#6B7280', marginTop: 2 },
   menuRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   menuValue: { fontSize: 14, color: '#9CA3AF', textTransform: 'capitalize' },
-  logoutButton: {
+  topLogoutButton: {
+    position: 'absolute',
+    top: 18,
+    right: 18,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#EF4444',
-    borderRadius: 10,
-    paddingVertical: 16,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    zIndex: 10,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
   logoutText: { color: 'white', fontSize: 16, fontWeight: '700' },
   tabBar: {
