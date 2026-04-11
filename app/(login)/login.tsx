@@ -1,18 +1,19 @@
-import { auth } from '@/firebaseConfig';
+import { auth, db } from '@/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import {
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 export default function LoginScreen() {
@@ -37,12 +38,29 @@ export default function LoginScreen() {
       );
 
       const user = userCredential.user;
-
       await user.reload();
 
+      // Check admin first
+      const adminRef = doc(db, 'admin', user.uid);
+      const adminSnap = await getDoc(adminRef);
+
+      if (adminSnap.exists()) {
+        const adminData = adminSnap.data();
+
+        if (adminData.active === true) {
+          Alert.alert('Success', 'Admin logged in successfully.');
+          router.replace('/admin.dashboard');
+          return;
+        }
+
+        await signOut(auth);
+        Alert.alert('Access Denied', 'This admin account is inactive.');
+        return;
+      }
+
+      // Normal users must have verified email
       if (!user.emailVerified) {
         await signOut(auth);
-
         Alert.alert(
           'Email Not Verified',
           'Please check your Gmail and click the verification link before logging in.'
@@ -51,9 +69,10 @@ export default function LoginScreen() {
       }
 
       Alert.alert('Success', 'Logged in successfully.');
-
       router.replace('/(home_dasborad)/home.dashboard');
     } catch (error: any) {
+      console.log('LOGIN ERROR:', error);
+
       let message = 'Please check your email and password.';
 
       if (error.code === 'auth/invalid-email') {
@@ -66,6 +85,10 @@ export default function LoginScreen() {
         message = 'Invalid email or password.';
       } else if (error.code === 'auth/too-many-requests') {
         message = 'Too many login attempts. Please try again later.';
+      } else if (error.code === 'permission-denied') {
+        message = 'Firestore access was denied.';
+      } else if (error.code === 'auth/network-request-failed') {
+        message = 'Network error. Please check your internet connection.';
       }
 
       Alert.alert('Login Failed', message);
@@ -92,9 +115,7 @@ export default function LoginScreen() {
           </TouchableOpacity>
 
           <View style={styles.header}>
-            <Text style={styles.title}>
-              Welcome Back
-            </Text>
+            <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>
               Sign in to continue reporting issues.
             </Text>
