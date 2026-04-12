@@ -1,5 +1,4 @@
 import { auth, db } from '@/firebaseConfig';
-import { auth } from '@/firebaseConfig';
 import { getCurrentUserRole, getHomeRouteByRole } from '@/services/roleNavigation';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';

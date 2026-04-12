@@ -4,7 +4,7 @@ import { REPORT_CATEGORIES, REPORT_URGENCY_LEVELS, ReportCategory, ReportUrgency
 import { submitReport } from '@/services/reportService';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,

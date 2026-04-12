@@ -8,24 +8,20 @@ function RootLayoutContent() {
 
   return (
     <NavigationProvider value={isDarkMode ? DarkTheme : DefaultTheme}>
-      <Stack initialRouteName="splash">
-        <Stack.Screen name="splash" options={{ headerShown: false }} />
+      <Stack initialRouteName="index">
+        <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(login)" options={{ headerShown: false }} />
-
         <Stack.Screen name="(home_dasborad)" options={{ headerShown: false }} />
         <Stack.Screen name="(reports_dashboard)" options={{ headerShown: false }} />
         <Stack.Screen name="(maps.dashboard)" options={{ headerShown: false }} />
         <Stack.Screen name="(ideas_dashboard)" options={{ headerShown: false }} />
         <Stack.Screen name="(category.dashboard)" options={{ headerShown: false }} />
         <Stack.Screen name="(admin.dashboard)" options={{ headerShown: false }} />
-
         <Stack.Screen name="profile" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         <Stack.Screen name="edit-report" options={{ presentation: 'modal', title: 'Edit Report' }} />
         <Stack.Screen name="new-suggestion" options={{ presentation: 'modal', title: 'New Suggestion' }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-
-        <Stack.Screen options={{ headerShown: false }} />
       </Stack>
 
       <StatusBar style={isDarkMode ? 'light' : 'dark'} />
