@@ -1,3 +1,4 @@
+import AdminReportsMap from '@/components/AdminReportsMap';
 import { auth, db } from '@/firebaseConfig';
 import { Stack, useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
@@ -21,7 +22,6 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import AdminReportsMap from '@/components/AdminReportsMap';
 
 type ReportMapItem = {
   id: string;
@@ -152,13 +152,26 @@ const MapDashboard = () => {
     return () => unsubscribe();
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      router.replace('/login');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to log out.');
-    }
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut(auth);
+              router.replace('/login');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to log out.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const getStatusColor = (status: string) => {

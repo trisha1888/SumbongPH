@@ -15,7 +15,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import {
   collection,
-  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -24,6 +23,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -39,6 +39,7 @@ type UserProfile = {
   mobileNumber?: string;
   barangay?: string;
   role?: string;
+  profilePic?: string;
 };
 
 type NotificationItem = {
@@ -65,47 +66,31 @@ export default function HomeDashboard() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
   useEffect(() => {
-    const fetchUserProfile = async () => {
-      try {
-        const currentUser = auth.currentUser;
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setLoadingProfile(false);
+      return;
+    }
 
-        if (!currentUser) {
-          setLoadingProfile(false);
-          return;
-        }
-
-        const q = query(collection(db, 'users'), where('uid', '==', currentUser.uid));
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-          const docData = querySnapshot.docs[0].data();
-
-          setUserProfile({
-            uid: docData.uid,
-            name: docData.name || currentUser.displayName || 'User',
-            email: docData.email || currentUser.email || '',
-            mobileNumber: docData.mobileNumber || '',
-            barangay: docData.barangay || '',
-            role: docData.role || 'user',
-          });
-        } else {
-          setUserProfile({
-            uid: currentUser.uid,
-            name: currentUser.displayName || 'User',
-            email: currentUser.email || '',
-            mobileNumber: '',
-            barangay: '',
-            role: 'user',
-          });
-        }
-      } catch (error) {
-        console.log('DASHBOARD PROFILE ERROR:', error);
-      } finally {
-        setLoadingProfile(false);
+    const q = query(collection(db, 'users'), where('uid', '==', currentUser.uid));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const docData = snapshot.docs[0].data();
+        setUserProfile({
+          uid: docData.uid,
+          name: docData.name || currentUser.displayName || 'User',
+          email: docData.email || currentUser.email || '',
+          mobileNumber: docData.mobileNumber || '',
+          barangay: docData.barangay || '',
+          role: docData.role || 'user',
+          profilePic: docData.profilePic || '',
+        });
       }
-    };
+      setLoadingProfile(false);
+    });
 
-    fetchUserProfile();
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -184,13 +169,10 @@ export default function HomeDashboard() {
 
   const getInitials = (name?: string) => {
     if (!name) return 'U';
-
     const parts = name.trim().split(' ').filter(Boolean);
-
     if (parts.length === 1) {
       return parts[0].charAt(0).toUpperCase();
     }
-
     return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
   };
 
@@ -245,7 +227,11 @@ export default function HomeDashboard() {
               </TouchableOpacity>
 
               <View style={styles.avatar}>
-                <ThemedText style={styles.avatarText}>{getInitials(userProfile?.name)}</ThemedText>
+                {userProfile?.profilePic ? (
+                  <Image source={{ uri: userProfile.profilePic }} style={styles.avatarImage} />
+                ) : (
+                  <ThemedText style={styles.avatarText}>{getInitials(userProfile?.name)}</ThemedText>
+                )}
               </View>
             </View>
           </View>
@@ -300,7 +286,7 @@ export default function HomeDashboard() {
                 No recent reports
               </ThemedText>
               <ThemedText style={[styles.emptyText, isDarkMode && styles.darkSubText]}>
-                Reports disappear here once they are resolved or older than 3 days, but they still remain in Reports Dashboard.
+                Reports disappear here once they are resolved or older than 3 days.
               </ThemedText>
             </View>
           ) : (
@@ -318,7 +304,7 @@ export default function HomeDashboard() {
 
         <View style={[styles.tabBar, isDarkMode && styles.darkCard]}>
           <TabIcon
-            icon="home"
+            icon="home-outline"
             label="Home"
             active
             onPress={() => router.push('/(home_dasborad)/home.dashboard')}
@@ -410,7 +396,11 @@ function TabIcon({
 }) {
   return (
     <TouchableOpacity style={styles.tabItem} onPress={onPress} activeOpacity={0.7}>
-      <Ionicons name={icon} size={22} color={active ? '#2F70E9' : '#9CA3AF'} />
+      <Ionicons 
+        name={active ? (icon as string).replace('-outline', '') : icon} 
+        size={22} 
+        color={active ? '#2F70E9' : '#9CA3AF'} 
+      />
       <ThemedText style={[styles.tabLabel, { color: active ? '#2F70E9' : '#9CA3AF' }]}>
         {label}
       </ThemedText>
@@ -419,292 +409,55 @@ function TabIcon({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  darkContainer: {
-    backgroundColor: '#111827',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  darkCard: {
-    backgroundColor: '#1F2937',
-    borderColor: '#374151',
-  },
-  darkText: {
-    color: '#F9FAFB',
-  },
-  darkSubText: {
-    color: '#9CA3AF',
-  },
-  safeArea: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 110,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  welcomeLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  userName: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#111827',
-    marginTop: 2,
-  },
-  userBarangay: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  notificationWrap: {
-    position: 'relative',
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeWrap: {
-    position: 'absolute',
-    top: -2,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#EF4444',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  badgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#2F70E9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 14,
-    marginBottom: 22,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 18,
-    padding: 16,
-  },
-  statTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  statIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 30,
-    fontWeight: '700',
-    color: '#111827',
-    marginTop: 12,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  sectionSubtext: {
-    marginTop: 6,
-    marginBottom: 14,
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  viewAll: {
-    color: '#2F70E9',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  emptyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 22,
-  },
-  emptyTitle: {
-    marginTop: 12,
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  emptyText: {
-    marginTop: 8,
-    fontSize: 13,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 19,
-  },
-  reportCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
-  },
-  reportTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  reportLeftRow: {
-    flexDirection: 'row',
-    flex: 1,
-    alignItems: 'center',
-  },
-  reportIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  reportTextWrap: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  reportTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  reportCode: {
-    marginTop: 4,
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  statusBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  reportDescription: {
-    marginTop: 14,
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#6B7280',
-  },
-  reportFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 14,
-  },
-  footerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    gap: 6,
-  },
-  footerText: {
-    fontSize: 12,
-    color: '#6B7280',
-    flex: 1,
-  },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 88,
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#2F70E9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-  },
-  tabBar: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
-    bottom: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 24,
-    paddingHorizontal: 10,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  tabItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  tabLabel: {
-    marginTop: 4,
-    fontSize: 10,
-    fontWeight: '600',
-  },
+  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  darkContainer: { backgroundColor: '#111827' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' },
+  loadingText: { marginTop: 12, fontSize: 14, color: '#6B7280' },
+  darkCard: { backgroundColor: '#1F2937', borderColor: '#374151' },
+  darkText: { color: '#F9FAFB' },
+  darkSubText: { color: '#9CA3AF' },
+  safeArea: { flex: 1 },
+  scrollContent: { padding: 20, paddingBottom: 110 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  welcomeLabel: { fontSize: 14, color: '#6B7280' },
+  userName: { fontSize: 28, fontWeight: '700', color: '#111827', marginTop: 2 },
+  userBarangay: { fontSize: 13, color: '#6B7280', marginTop: 2 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  notificationWrap: { position: 'relative', width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  badgeWrap: { position: 'absolute', top: -2, right: -4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  badgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
+  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#2F70E9', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  avatarImage: { width: 42, height: 42, borderRadius: 21 },
+  avatarText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  statsRow: { flexDirection: 'row', gap: 14, marginBottom: 22 },
+  statCard: { flex: 1, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 18, padding: 16 },
+  statTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  statLabel: { fontSize: 14, color: '#6B7280' },
+  statIconWrap: { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center' },
+  statValue: { fontSize: 30, fontWeight: '700', color: '#111827', marginTop: 12 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sectionTitle: { fontSize: 22, fontWeight: '700', color: '#111827' },
+  sectionSubtext: { marginTop: 6, marginBottom: 14, fontSize: 13, color: '#6B7280' },
+  viewAll: { color: '#2F70E9', fontSize: 14, fontWeight: '700' },
+  emptyCard: { backgroundColor: '#FFFFFF', borderRadius: 18, borderWidth: 1, borderColor: '#E5E7EB', padding: 20, alignItems: 'center', marginBottom: 22 },
+  emptyTitle: { marginTop: 12, fontSize: 18, fontWeight: '700', color: '#111827' },
+  emptyText: { marginTop: 8, fontSize: 13, color: '#6B7280', textAlign: 'center', lineHeight: 19 },
+  reportCard: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 18, padding: 16, marginBottom: 12 },
+  reportTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },
+  reportLeftRow: { flexDirection: 'row', flex: 1, alignItems: 'center' },
+  reportIconWrap: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' },
+  reportTextWrap: { flex: 1, marginLeft: 12 },
+  reportTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
+  reportCode: { marginTop: 4, fontSize: 12, color: '#6B7280' },
+  statusBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  statusText: { fontSize: 11, fontWeight: '700' },
+  reportDescription: { marginTop: 14, fontSize: 14, lineHeight: 20, color: '#6B7280' },
+  reportFooter: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 14 },
+  footerItem: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 6 },
+  footerText: { fontSize: 12, color: '#6B7280', flex: 1 },
+  // FAB position adjusted from bottom: 88 to bottom: 98
+  fab: { position: 'absolute', right: 20, bottom: 98, width: 58, height: 58, borderRadius: 29, backgroundColor: '#2F70E9', justifyContent: 'center', alignItems: 'center', elevation: 4 },
+  tabBar: { position: 'absolute', left: 12, right: 12, bottom: 12, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 24, paddingHorizontal: 10, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  tabItem: { alignItems: 'center', flex: 1 },
+  tabLabel: { marginTop: 4, fontSize: 10, fontWeight: '600' },
 });

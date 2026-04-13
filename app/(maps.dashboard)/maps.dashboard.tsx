@@ -15,16 +15,13 @@ export default function MapDashboard() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={{ flex: 1 }}>
-        <View style={[styles.mapHeader, isDarkMode && styles.darkHeader]}>
-          <ThemedText style={[styles.headerTitle, isDarkMode && styles.darkText]}>
-            Map
-          </ThemedText>
-        </View>
-
+        {/* Header removed as requested */}
+        
         <View style={[styles.mapCanvas, isDarkMode && styles.darkMapCanvas]}>
           <MapsDashboardView isDarkMode={isDarkMode} />
         </View>
 
+        {/* Floating Tab Bar */}
         <View style={[styles.tabBar, isDarkMode && styles.darkTabBar]}>
           <TabIcon
             icon="home-outline"
@@ -37,7 +34,7 @@ export default function MapDashboard() {
             onPress={() => router.push('/(reports_dashboard)/reports.dashboard')}
           />
           <TabIcon
-            icon="map"
+            icon="map-outline"
             label="Maps"
             active
             onPress={() => router.push('/(maps.dashboard)/maps.dashboard')}
@@ -63,15 +60,14 @@ function TabIcon({
   label,
   active,
   onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  active?: boolean;
-  onPress: () => void;
-}) {
+}: any) {
   return (
     <TouchableOpacity style={styles.tabItem} onPress={onPress} activeOpacity={0.7}>
-      <Ionicons name={icon} size={24} color={active ? '#2F70E9' : '#9CA3AF'} />
+      <Ionicons 
+        name={active ? (icon as string).replace('-outline', '') : icon} 
+        size={22} 
+        color={active ? '#2F70E9' : '#9CA3AF'} 
+      />
       <ThemedText style={[styles.tabLabel, { color: active ? '#2F70E9' : '#9CA3AF' }]}>
         {label}
       </ThemedText>
@@ -80,60 +76,33 @@ function TabIcon({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#E0E7FF' },
-  darkContainer: { backgroundColor: '#0F172A' },
-  mapHeader: {
-    padding: 20,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-  },
-  darkHeader: {
-    backgroundColor: '#111827',
-    borderBottomWidth: 1,
-    borderBottomColor: '#374151',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  darkText: {
-    color: '#F9FAFB',
-  },
+  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  darkContainer: { backgroundColor: '#111827' },
   mapCanvas: {
     flex: 1,
   },
   darkMapCanvas: {
     backgroundColor: '#0F172A',
   },
-  tabBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 85,
-    backgroundColor: 'white',
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingBottom: 20,
+  tabBar: { 
+    position: 'absolute', 
+    left: 12, 
+    right: 12, 
+    bottom: 12, 
+    backgroundColor: '#FFFFFF', 
+    borderWidth: 1, 
+    borderColor: '#E5E7EB', 
+    borderRadius: 24, 
+    paddingHorizontal: 10, 
+    paddingVertical: 12, 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center' 
   },
   darkTabBar: {
-    backgroundColor: '#111827',
-    borderTopColor: '#374151',
+    backgroundColor: '#1F2937',
+    borderColor: '#374151',
   },
-  tabItem: {
-    alignItems: 'center',
-  },
-  tabLabel: {
-    fontSize: 11,
-    marginTop: 4,
-    fontWeight: '600',
-  },
+  tabItem: { alignItems: 'center', flex: 1 },
+  tabLabel: { marginTop: 4, fontSize: 10, fontWeight: '600' },
 });
