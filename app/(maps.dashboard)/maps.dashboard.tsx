@@ -15,13 +15,10 @@ export default function MapDashboard() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={{ flex: 1 }}>
-        {/* Header removed as requested */}
-        
         <View style={[styles.mapCanvas, isDarkMode && styles.darkMapCanvas]}>
           <MapsDashboardView isDarkMode={isDarkMode} />
         </View>
 
-        {/* Floating Tab Bar */}
         <View style={[styles.tabBar, isDarkMode && styles.darkTabBar]}>
           <TabIcon
             icon="home-outline"
@@ -40,11 +37,6 @@ export default function MapDashboard() {
             onPress={() => router.push('/(maps.dashboard)/maps.dashboard')}
           />
           <TabIcon
-            icon="bulb-outline"
-            label="Ideas"
-            onPress={() => router.push('/(ideas_dashboard)/ideas_dashboard')}
-          />
-          <TabIcon
             icon="person-outline"
             label="Profile"
             onPress={() => router.push('/profile')}
@@ -55,18 +47,24 @@ export default function MapDashboard() {
   );
 }
 
-function TabIcon({
-  icon,
-  label,
-  active,
-  onPress,
-}: any) {
+type TabIconProps = {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  active?: boolean;
+  onPress: () => void;
+};
+
+function TabIcon({ icon, label, active, onPress }: TabIconProps) {
+  const activeIcon = active
+    ? (icon.replace('-outline', '') as keyof typeof Ionicons.glyphMap)
+    : icon;
+
   return (
     <TouchableOpacity style={styles.tabItem} onPress={onPress} activeOpacity={0.7}>
-      <Ionicons 
-        name={active ? (icon as string).replace('-outline', '') : icon} 
-        size={22} 
-        color={active ? '#2F70E9' : '#9CA3AF'} 
+      <Ionicons
+        name={activeIcon}
+        size={22}
+        color={active ? '#2F70E9' : '#9CA3AF'}
       />
       <ThemedText style={[styles.tabLabel, { color: active ? '#2F70E9' : '#9CA3AF' }]}>
         {label}
@@ -84,20 +82,20 @@ const styles = StyleSheet.create({
   darkMapCanvas: {
     backgroundColor: '#0F172A',
   },
-  tabBar: { 
-    position: 'absolute', 
-    left: 12, 
-    right: 12, 
-    bottom: 12, 
-    backgroundColor: '#FFFFFF', 
-    borderWidth: 1, 
-    borderColor: '#E5E7EB', 
-    borderRadius: 24, 
-    paddingHorizontal: 10, 
-    paddingVertical: 12, 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center' 
+  tabBar: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 24,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   darkTabBar: {
     backgroundColor: '#1F2937',

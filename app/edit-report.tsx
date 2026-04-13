@@ -23,6 +23,12 @@ import {
 import ReportLocationPicker from '../components/ReportLocationPicker';
 import { useTheme } from './ThemeContext';
 
+type SelectedLocation = {
+  latitude: number;
+  longitude: number;
+  address: string;
+};
+
 const CATEGORY_META: Record<
   ReportCategory,
   { icon: keyof typeof Ionicons.glyphMap; bg: string; color: string }
@@ -53,20 +59,9 @@ export default function EditReportScreen() {
   const [urgency, setUrgency] = useState<ReportUrgency>('Medium');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  const [selectedLocation, setSelectedLocation] = useState<{
-    latitude: number;
-    longitude: number;
-  } | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
 
   const categoryMeta = CATEGORY_META[category];
-
-  const handleLocationChange = (coords: {
-    latitude: number;
-    longitude: number;
-  }) => {
-    setSelectedLocation(coords);
-  };
 
   const handleSubmit = async () => {
     if (!title.trim()) {
@@ -95,11 +90,16 @@ export default function EditReportScreen() {
       const result = await submitReport({
         category,
         title,
-        location,
-        urgency,
         description,
+        location,
         latitude: selectedLocation.latitude,
         longitude: selectedLocation.longitude,
+        coordinates: {
+          latitude: selectedLocation.latitude,
+          longitude: selectedLocation.longitude,
+          address: location,
+        },
+        urgency,
       });
 
       Alert.alert(
@@ -188,10 +188,11 @@ export default function EditReportScreen() {
               <Ionicons name="location-outline" size={20} color="#9CA3AF" />
               <TextInput
                 style={[styles.flexInput, isDarkMode && styles.darkText]}
-                placeholder="Example: Purok 3, near chapel"
+                placeholder="Selected address will appear here"
                 placeholderTextColor="#9CA3AF"
                 value={location}
                 onChangeText={setLocation}
+                multiline
               />
             </View>
 
@@ -200,12 +201,17 @@ export default function EditReportScreen() {
             </ThemedText>
 
             <ReportLocationPicker
-              isDarkMode={isDarkMode}
-              selectedLocation={selectedLocation}
-              onLocationChange={handleLocationChange}
-              title={title}
-              location={location}
+              value={selectedLocation}
+              onLocationSelect={(pickedLocation: SelectedLocation) => {
+                setSelectedLocation(pickedLocation);
+                setLocation(pickedLocation.address);
+              }}
+              height={320}
             />
+
+            <ThemedText style={[styles.helperText, isDarkMode && styles.darkSubText]}>
+              Tap the map to drop a pin and auto-fill the address.
+            </ThemedText>
 
             {selectedLocation && (
               <View style={[styles.coordinatesBox, isDarkMode && styles.darkInput]}>
@@ -214,6 +220,9 @@ export default function EditReportScreen() {
                 </ThemedText>
                 <ThemedText style={[styles.coordinatesText, isDarkMode && styles.darkText]}>
                   Longitude: {selectedLocation.longitude.toFixed(6)}
+                </ThemedText>
+                <ThemedText style={[styles.coordinatesText, isDarkMode && styles.darkText]}>
+                  Address: {selectedLocation.address}
                 </ThemedText>
               </View>
             )}
@@ -354,6 +363,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 8,
   },
+  helperText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 8,
+    marginBottom: 6,
+  },
   input: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -367,21 +382,21 @@ const styles = StyleSheet.create({
   },
   inputRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E5E7EB',
     borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 2,
+    paddingVertical: 10,
     marginBottom: 6,
   },
   flexInput: {
     flex: 1,
     fontSize: 15,
     color: '#111827',
-    paddingVertical: 12,
     marginLeft: 10,
+    minHeight: 24,
   },
   coordinatesBox: {
     borderWidth: 1,
@@ -389,6 +404,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 12,
     marginBottom: 8,
+    marginTop: 8,
   },
   coordinatesText: {
     fontSize: 14,

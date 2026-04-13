@@ -1,6 +1,7 @@
 import { auth, db } from '@/firebaseConfig';
 import {
   NewReportInput,
+  ReportCoordinates,
   ReportItem,
   ReportStatus,
 } from '@/models/report';
@@ -47,11 +48,7 @@ const getCurrentUserProfile = async (): Promise<UserProfile> => {
     throw new Error('You must be logged in to submit a report.');
   }
 
-  const userQuery = query(
-    collection(db, 'users'),
-    where('uid', '==', currentUser.uid)
-  );
-
+  const userQuery = query(collection(db, 'users'), where('uid', '==', currentUser.uid));
   const userSnapshot = await getDocs(userQuery);
 
   if (!userSnapshot.empty) {
@@ -82,120 +79,33 @@ const generateReportCode = () => {
   return `SBP-${year}-${random}`;
 };
 
-const sortReportsNewestFirst = (reports: ReportItem[]) => {
-  return [...reports].sort((a, b) => {
-    const aTime = getReportDate(a)?.getTime() ?? 0;
-    const bTime = getReportDate(b)?.getTime() ?? 0;
-    return bTime - aTime;
-  });
-};
+const normalizeCoordinates = (data: any): ReportCoordinates => {
+  const latitude =
+    typeof data?.coordinates?.latitude === 'number'
+      ? data.coordinates.latitude
+      : typeof data?.latitude === 'number'
+        ? data.latitude
+        : 0;
 
-const mapReportDoc = (doc: any): ReportItem => {
-  const data = doc.data();
+  const longitude =
+    typeof data?.coordinates?.longitude === 'number'
+      ? data.coordinates.longitude
+      : typeof data?.longitude === 'number'
+        ? data.longitude
+        : 0;
 
-  return {
-    id: doc.id,
-    reportCode: data.reportCode || '',
-    category: data.category || 'Other',
-    title: data.title || '',
-    description: data.description || '',
-    location: data.location || '',
-    latitude: typeof data.latitude === 'number' ? data.latitude : null,
-    longitude: typeof data.longitude === 'number' ? data.longitude : null,
-    urgency: data.urgency || 'Low',
-    status: normalizeStatus(data.status),
-    barangay: data.barangay || '',
-    userId: data.userId || '',
-    userName: data.userName || '',
-    userEmail: data.userEmail || '',
-    mobileNumber: data.mobileNumber || '',
-    createdAt: data.createdAt,
-    updatedAt: data.updatedAt,
-  };
-};
-
-export const submitReport = async (
-  input: NewReportInput
-): Promise<{ id: string; reportCode: string }> => {
-  const currentUser = auth.currentUser;
-
-  if (!currentUser) {
-    throw new Error('You must be logged in to submit a report.');
-  }
-
-  const profile = await getCurrentUserProfile();
-  const reportCode = generateReportCode();
-
-  const docRef = await addDoc(collection(db, 'reports'), {
-    reportCode,
-    category: input.category,
-    title: input.title.trim(),
-    description: input.description.trim(),
-    location: input.location.trim(),
-    latitude: input.latitude,
-    longitude: input.longitude,
-    urgency: input.urgency,
-    status: 'Pending',
-    userId: profile.uid,
-    userName: profile.name,
-    userEmail: profile.email,
-    barangay: profile.barangay,
-    mobileNumber: profile.mobileNumber,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
+  const address =
+    typeof data?.coordinates?.address === 'string' && data.coordinates.address.trim()
+      ? data.coordinates.address.trim()
+      : typeof data?.location === 'string'
+        ? data.location.trim()
+        : '';
 
   return {
-    id: docRef.id,
-    reportCode,
+    latitude,
+    longitude,
+    address,
   };
-};
-
-export const fetchReports = async (): Promise<ReportItem[]> => {
-  const currentUser = auth.currentUser;
-
-  if (!currentUser) {
-    return [];
-  }
-
-  const reportsQuery = query(
-    collection(db, 'reports'),
-    where('userId', '==', currentUser.uid)
-  );
-
-  const snapshot = await getDocs(reportsQuery);
-  const reports = snapshot.docs.map(mapReportDoc);
-
-  return sortReportsNewestFirst(reports);
-};
-
-export const subscribeToMyReports = (
-  callback: (reports: ReportItem[]) => void,
-  onError?: (error: any) => void
-) => {
-  const currentUser = auth.currentUser;
-
-  if (!currentUser) {
-    callback([]);
-    return () => {};
-  }
-
-  const reportsQuery = query(
-    collection(db, 'reports'),
-    where('userId', '==', currentUser.uid)
-  );
-
-  return onSnapshot(
-    reportsQuery,
-    (snapshot) => {
-      const reports = snapshot.docs.map(mapReportDoc);
-      callback(sortReportsNewestFirst(reports));
-    },
-    (error) => {
-      console.log('SUBSCRIBE REPORTS ERROR:', error);
-      if (onError) onError(error);
-    }
-  );
 };
 
 export const getReportDate = (report: ReportItem): Date | null => {
@@ -221,6 +131,126 @@ export const getReportDate = (report: ReportItem): Date | null => {
   } catch {
     return null;
   }
+};
+
+const sortReportsNewestFirst = (reports: ReportItem[]) => {
+  return [...reports].sort((a, b) => {
+    const aTime = getReportDate(a)?.getTime() ?? 0;
+    const bTime = getReportDate(b)?.getTime() ?? 0;
+    return bTime - aTime;
+  });
+};
+
+const mapReportDoc = (doc: any): ReportItem => {
+  const data = doc.data();
+  const coordinates = normalizeCoordinates(data);
+
+  return {
+    id: doc.id,
+    reportCode: data.reportCode || '',
+    category: data.category || 'Other',
+    title: data.title || '',
+    description: data.description || '',
+    location: data.location || coordinates.address || '',
+    latitude: coordinates.latitude,
+    longitude: coordinates.longitude,
+    coordinates,
+    urgency: data.urgency || 'Low',
+    status: normalizeStatus(data.status),
+    barangay: data.barangay || '',
+    userId: data.userId || '',
+    userName: data.userName || '',
+    userEmail: data.userEmail || '',
+    mobileNumber: data.mobileNumber || '',
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+    resolvedAt: data.resolvedAt,
+    isRead: data.isRead ?? false,
+  };
+};
+
+export const submitReport = async (
+  input: NewReportInput
+): Promise<{ id: string; reportCode: string }> => {
+  const currentUser = auth.currentUser;
+
+  if (!currentUser) {
+    throw new Error('You must be logged in to submit a report.');
+  }
+
+  const profile = await getCurrentUserProfile();
+  const reportCode = generateReportCode();
+
+  const safeCoordinates: ReportCoordinates = {
+    latitude: input.coordinates?.latitude ?? input.latitude,
+    longitude: input.coordinates?.longitude ?? input.longitude,
+    address: input.coordinates?.address?.trim() || input.location.trim(),
+  };
+
+  const docRef = await addDoc(collection(db, 'reports'), {
+    reportCode,
+    category: input.category,
+    title: input.title.trim(),
+    description: input.description.trim(),
+    location: input.location.trim(),
+    latitude: input.latitude,
+    longitude: input.longitude,
+    coordinates: safeCoordinates,
+    urgency: input.urgency,
+    status: 'Pending',
+    userId: profile.uid,
+    userName: profile.name,
+    userEmail: profile.email,
+    barangay: profile.barangay,
+    mobileNumber: profile.mobileNumber,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  return {
+    id: docRef.id,
+    reportCode,
+  };
+};
+
+export const fetchReports = async (): Promise<ReportItem[]> => {
+  const currentUser = auth.currentUser;
+
+  if (!currentUser) {
+    return [];
+  }
+
+  const reportsQuery = query(collection(db, 'reports'), where('userId', '==', currentUser.uid));
+  const snapshot = await getDocs(reportsQuery);
+  const reports = snapshot.docs.map(mapReportDoc);
+
+  return sortReportsNewestFirst(reports);
+};
+
+export const subscribeToMyReports = (
+  callback: (reports: ReportItem[]) => void,
+  onError?: (error: any) => void
+) => {
+  const currentUser = auth.currentUser;
+
+  if (!currentUser) {
+    callback([]);
+    return () => {};
+  }
+
+  const reportsQuery = query(collection(db, 'reports'), where('userId', '==', currentUser.uid));
+
+  return onSnapshot(
+    reportsQuery,
+    (snapshot) => {
+      const reports = snapshot.docs.map(mapReportDoc);
+      callback(sortReportsNewestFirst(reports));
+    },
+    (error) => {
+      console.log('SUBSCRIBE REPORTS ERROR:', error);
+      if (onError) onError(error);
+    }
+  );
 };
 
 export const isResolvedStatus = (status: string) => {

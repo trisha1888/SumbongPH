@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 type ReportMapItem = {
   id: string;
@@ -17,46 +17,21 @@ type Props = {
   onSelectReport?: (report: ReportMapItem) => void;
 };
 
+declare global {
+  interface Window {
+    google: any;
+  }
+}
+
 export default function AdminReportsMap({
   reports = [],
   selectedReport = null,
   onSelectReport,
 }: Props) {
-  const [mounted, setMounted] = useState(false);
-  const [MapComponents, setMapComponents] = useState<any>(null);
-  const [leafletLib, setLeafletLib] = useState<any>(null);
-
-  useEffect(() => {
-    setMounted(true);
-
-    const loadMap = async () => {
-      const leaflet = await import('react-leaflet');
-      const L = await import('leaflet');
-
-      setMapComponents({
-        MapContainer: leaflet.MapContainer,
-        TileLayer: leaflet.TileLayer,
-        Marker: leaflet.Marker,
-        Popup: leaflet.Popup,
-      });
-
-      setLeafletLib(L);
-    };
-
-    loadMap();
-  }, []);
-
-  const center = useMemo<[number, number]>(() => {
-    if (selectedReport) {
-      return [selectedReport.latitude, selectedReport.longitude];
-    }
-
-    if (reports.length > 0) {
-      return [reports[0].latitude, reports[0].longitude];
-    }
-
-    return [14.5995, 120.9842];
-  }, [reports, selectedReport]);
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
+  const infoWindowRef = useRef<any>(null);
 
   const getStatusColor = (status: string) => {
     const normalized = status.toLowerCase();
@@ -68,123 +43,192 @@ export default function AdminReportsMap({
     return '#9CA3AF';
   };
 
-  const createPinIcon = (color: string, isSelected: boolean = false) => {
-    if (!leafletLib) return null;
+  const createMarkerIcon = (color: string, isSelected: boolean = false) => {
+    const scale = isSelected ? 12 : 10;
 
-    const size = isSelected ? 34 : 28;
-
-    return leafletLib.divIcon({
-      className: '',
-      html: `
-        <div style="
-          width:${size}px;
-          height:${size}px;
-          background:${color};
-          border:3px solid white;
-          border-radius:50% 50% 50% 0;
-          transform:rotate(-45deg);
-          box-shadow:0 3px 10px rgba(0,0,0,0.25);
-          display:flex;
-          align-items:center;
-          justify-content:center;
-        ">
-          <div style="
-            width:${isSelected ? 12 : 10}px;
-            height:${isSelected ? 12 : 10}px;
-            background:white;
-            border-radius:50%;
-            transform:rotate(45deg);
-          "></div>
-        </div>
-      `,
-      iconSize: [size, size],
-      iconAnchor: [size / 2, size],
-      popupAnchor: [0, -size],
-    });
+    return {
+      path: window.google.maps.SymbolPath.CIRCLE,
+      fillColor: color,
+      fillOpacity: 1,
+      strokeColor: '#FFFFFF',
+      strokeWeight: 3,
+      scale,
+    };
   };
 
-  if (!mounted || !MapComponents || !leafletLib) {
-    return (
-      <div
-        style={{
-          height: '560px',
-          width: '100%',
-          borderRadius: '16px',
-          backgroundColor: '#f3f4f6',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontFamily: 'Arial, sans-serif',
-          color: '#555',
-          border: '1px solid #ddd',
-        }}
-      >
-        Loading map...
-      </div>
-    );
-  }
+  useEffect(() => {
+    const initializeMap = () => {
+      if (!mapRef.current || !window.google?.maps) return;
 
-  const { MapContainer, TileLayer, Marker, Popup } = MapComponents;
+      const center = selectedReport
+        ? {
+            lat: selectedReport.latitude,
+            lng: selectedReport.longitude,
+          }
+        : reports.length > 0
+        ? {
+            lat: reports[0].latitude,
+            lng: reports[0].longitude,
+          }
+        : {
+            lat: 14.5995,
+            lng: 120.9842,
+          };
+
+      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
+        center,
+        zoom: selectedReport ? 15 : reports.length > 0 ? 13 : 12,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true,
+      });
+
+      infoWindowRef.current = new window.google.maps.InfoWindow();
+      renderMarkers();
+    };
+
+    const loadGoogleMaps = () => {
+      if (window.google?.maps) {
+        initializeMap();
+        return;
+      }
+
+      const existingScript = document.getElementById('google-maps-script');
+      if (existingScript) {
+        existingScript.addEventListener('load', initializeMap);
+        return;
+      }
+
+      const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+      if (!apiKey) {
+        console.error('Missing EXPO_PUBLIC_GOOGLE_MAPS_API_KEY');
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.id = 'google-maps-script';
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+      script.async = true;
+      script.defer = true;
+      script.onload = initializeMap;
+      document.body.appendChild(script);
+    };
+
+    loadGoogleMaps();
+
+    return () => {
+      markersRef.current.forEach((marker) => marker.setMap(null));
+      markersRef.current = [];
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!mapInstanceRef.current || !window.google?.maps) return;
+    renderMarkers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reports, selectedReport]);
+
+  const renderMarkers = () => {
+    if (!mapInstanceRef.current || !window.google?.maps) return;
+
+    markersRef.current.forEach((marker) => marker.setMap(null));
+    markersRef.current = [];
+
+    const bounds = new window.google.maps.LatLngBounds();
+
+    reports.forEach((report) => {
+      const isSelected = selectedReport?.id === report.id;
+      const pinColor = getStatusColor(report.status);
+
+      const marker = new window.google.maps.Marker({
+        position: {
+          lat: report.latitude,
+          lng: report.longitude,
+        },
+        map: mapInstanceRef.current,
+        title: report.title,
+        icon: createMarkerIcon(pinColor, isSelected),
+      });
+
+      const popupContent = `
+        <div style="min-width: 200px; font-family: Arial, sans-serif;">
+          <div style="font-size: 16px; font-weight: 700; margin-bottom: 8px;">
+            ${report.title}
+          </div>
+          <div style="margin-bottom: 4px;"><strong>Category:</strong> ${report.category}</div>
+          <div style="margin-bottom: 4px;"><strong>Status:</strong> ${report.status}</div>
+          <div style="margin-bottom: 8px;"><strong>Address:</strong> ${report.address}</div>
+          <button
+            id="select-report-${report.id}"
+            style="
+              padding: 8px 12px;
+              border: none;
+              border-radius: 8px;
+              background: ${pinColor};
+              color: white;
+              font-weight: 600;
+              cursor: pointer;
+            "
+          >
+            Select report
+          </button>
+        </div>
+      `;
+
+      marker.addListener('click', () => {
+        if (infoWindowRef.current) {
+          infoWindowRef.current.setContent(popupContent);
+          infoWindowRef.current.open({
+            anchor: marker,
+            map: mapInstanceRef.current,
+          });
+
+          window.google.maps.event.addListenerOnce(infoWindowRef.current, 'domready', () => {
+            const button = document.getElementById(`select-report-${report.id}`);
+            if (button) {
+              button.addEventListener('click', () => {
+                onSelectReport?.(report);
+              });
+            }
+          });
+        }
+
+        onSelectReport?.(report);
+      });
+
+      markersRef.current.push(marker);
+      bounds.extend(marker.getPosition());
+    });
+
+    if (selectedReport) {
+      mapInstanceRef.current.panTo({
+        lat: selectedReport.latitude,
+        lng: selectedReport.longitude,
+      });
+      mapInstanceRef.current.setZoom(15);
+    } else if (reports.length > 1) {
+      mapInstanceRef.current.fitBounds(bounds);
+    } else if (reports.length === 1) {
+      mapInstanceRef.current.setCenter({
+        lat: reports[0].latitude,
+        lng: reports[0].longitude,
+      });
+      mapInstanceRef.current.setZoom(15);
+    }
+  };
 
   return (
-    <div style={{ height: '560px', width: '100%', borderRadius: '16px', overflow: 'hidden' }}>
-      <MapContainer
-        center={center}
-        zoom={13}
-        scrollWheelZoom={true}
-        style={{ height: '100%', width: '100%' }}
-      >
-        <TileLayer
-          attribution="&copy; OpenStreetMap contributors"
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-
-        {reports.map((report) => {
-          const isSelected = selectedReport?.id === report.id;
-          const pinColor = getStatusColor(report.status);
-
-          return (
-            <Marker
-              key={report.id}
-              position={[report.latitude, report.longitude]}
-              icon={createPinIcon(pinColor, isSelected)}
-              eventHandlers={{
-                click: () => {
-                  onSelectReport?.(report);
-                },
-              }}
-            >
-              <Popup>
-                <div style={{ minWidth: '180px' }}>
-                  <strong>{report.title}</strong>
-                  <br />
-                  Category: {report.category}
-                  <br />
-                  Status: {report.status}
-                  <br />
-                  Address: {report.address}
-                  <br />
-                  <button
-                    style={{
-                      marginTop: '8px',
-                      padding: '6px 10px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      background: pinColor,
-                      color: 'white',
-                      cursor: 'pointer',
-                      fontWeight: 600,
-                    }}
-                    onClick={() => onSelectReport?.(report)}
-                  >
-                    Select report
-                  </button>
-                </div>
-              </Popup>
-            </Marker>
-          );
-        })}
-      </MapContainer>
-    </div>
+    <div
+      ref={mapRef}
+      style={{
+        height: '560px',
+        width: '100%',
+        borderRadius: '16px',
+        overflow: 'hidden',
+        backgroundColor: '#f3f4f6',
+      }}
+    />
   );
 }

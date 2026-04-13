@@ -1,210 +1,356 @@
-import { ThemedText } from '@/components/themed-text';
-import { db } from '@/firebaseConfig';
-import { collection, onSnapshot } from 'firebase/firestore';
-import 'leaflet/dist/leaflet.css';
+import { auth, db } from '@/firebaseConfig';
+import { ReportItem } from '@/models/report';
+import { GoogleMap, InfoWindow, Marker, useJsApiLoader } from '@react-google-maps/api';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
-  isDarkMode: boolean;
+  isDarkMode?: boolean;
 };
 
-type ReportMapItem = {
-  id: string;
-  title?: string;
-  location?: string;
-  category?: string;
-  latitude?: number | null;
-  longitude?: number | null;
+const mapContainerStyle = {
+  width: '100%',
+  height: '100%',
 };
 
-const DEFAULT_CENTER: [number, number] = [14.676, 121.0437];
+const fallbackCenter = {
+  lat: 14.5995,
+  lng: 120.9842,
+};
 
-function getPinColor(category?: string) {
-  switch (category) {
-    case 'Flood':
-      return '#A855F7';
-    case 'Garbage':
-      return '#22C55E';
-    case 'Road':
-      return '#F97316';
-    case 'Streetlight':
-      return '#EF4444';
-    case 'Noise':
-      return '#8B5CF6';
-    case 'Safety':
-      return '#DC2626';
+const libraries: ('places')[] = ['places'];
+
+function getStatusColor(status: string) {
+  switch (status) {
+    case 'Resolved':
+      return 'green';
+    case 'In Progress':
+      return 'blue';
+    case 'Under Review':
+      return 'orange';
     default:
-      return '#2F70E9';
+      return 'red';
   }
 }
 
-export default function MapsDashboardViewWeb({ isDarkMode }: Props) {
-  const [reports, setReports] = useState<ReportMapItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [leaflet, setLeaflet] = useState<any>(null);
+function normalizeReport(doc: any): ReportItem {
+  const data = doc.data();
+
+  const latitude =
+    typeof data?.coordinates?.latitude === 'number'
+      ? data.coordinates.latitude
+      : typeof data?.latitude === 'number'
+        ? data.latitude
+        : 0;
+
+  const longitude =
+    typeof data?.coordinates?.longitude === 'number'
+      ? data.coordinates.longitude
+      : typeof data?.longitude === 'number'
+        ? data.longitude
+        : 0;
+
+  const address =
+    typeof data?.coordinates?.address === 'string' && data.coordinates.address.trim()
+      ? data.coordinates.address
+      : data.location || '';
+
+  return {
+    id: doc.id,
+    reportCode: data.reportCode || '',
+    category: data.category || 'Other',
+    title: data.title || '',
+    description: data.description || '',
+    location: data.location || address || '',
+    latitude,
+    longitude,
+    coordinates: {
+      latitude,
+      longitude,
+      address,
+    },
+    urgency: data.urgency || 'Low',
+    status: data.status || 'Pending',
+    barangay: data.barangay || '',
+    userId: data.userId || '',
+    userName: data.userName || '',
+    userEmail: data.userEmail || '',
+    mobileNumber: data.mobileNumber || '',
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+    resolvedAt: data.resolvedAt,
+    isRead: data.isRead ?? false,
+  };
+}
+
+export default function MapsDashboardView({ isDarkMode = false }: Props) {
+  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('All');
+
+  const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: apiKey || '',
+    libraries,
+  });
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      collection(db, 'reports'),
-      (snapshot) => {
-        const data: ReportMapItem[] = snapshot.docs.map((doc) => {
-          const raw = doc.data() as any;
+    const currentUser = auth.currentUser;
 
-          return {
-            id: doc.id,
-            title: raw.title || 'Untitled Report',
-            location: raw.location || 'No location',
-            category: raw.category || 'Other',
-            latitude: typeof raw.latitude === 'number' ? raw.latitude : null,
-            longitude: typeof raw.longitude === 'number' ? raw.longitude : null,
-          };
-        });
+    if (!currentUser) {
+      setReports([]);
+      return;
+    }
 
-        setReports(data);
-        setLoading(false);
-      },
-      () => setLoading(false)
-    );
+    const reportsQuery = query(collection(db, 'reports'), where('userId', '==', currentUser.uid));
+
+    const unsubscribe = onSnapshot(reportsQuery, (snapshot) => {
+      const mapped = snapshot.docs.map(normalizeReport);
+      setReports(mapped);
+    });
 
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    let mounted = true;
+  const filteredReports = useMemo(() => {
+    if (statusFilter === 'All') return reports;
+    return reports.filter((report) => report.status === statusFilter);
+  }, [reports, statusFilter]);
 
-    const loadLeaflet = async () => {
-      if (typeof window === 'undefined') return;
+  const center = useMemo(() => {
+    if (
+      selectedReport &&
+      typeof selectedReport.latitude === 'number' &&
+      typeof selectedReport.longitude === 'number'
+    ) {
+      return {
+        lat: selectedReport.latitude,
+        lng: selectedReport.longitude,
+      };
+    }
 
-      const leafletModule = await import('react-leaflet');
-      const L = await import('leaflet');
-
-      if (!mounted) return;
-
-      setLeaflet({
-        MapContainer: leafletModule.MapContainer,
-        TileLayer: leafletModule.TileLayer,
-        Marker: leafletModule.Marker,
-        Popup: leafletModule.Popup,
-        divIcon: L.divIcon,
-      });
-    };
-
-    loadLeaflet();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const validReports = useMemo(() => {
-    return reports.filter(
-      (report) =>
-        typeof report.latitude === 'number' &&
-        typeof report.longitude === 'number'
+    const firstValid = filteredReports.find(
+      (report) => typeof report.latitude === 'number' && typeof report.longitude === 'number'
     );
-  }, [reports]);
 
-  if (loading || !leaflet) {
+    if (firstValid) {
+      return {
+        lat: firstValid.latitude,
+        lng: firstValid.longitude,
+      };
+    }
+
+    return fallbackCenter;
+  }, [filteredReports, selectedReport]);
+
+  if (!apiKey) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2F70E9" />
-        <ThemedText style={[styles.loadingText, isDarkMode && styles.darkSubText]}>
-          Loading map reports...
-        </ThemedText>
+      <View style={[styles.stateContainer, isDarkMode && styles.darkCard]}>
+        <Text style={[styles.stateTitle, isDarkMode && styles.darkText]}>
+          Google Maps API key not found
+        </Text>
+        <Text style={[styles.stateText, isDarkMode && styles.darkSubText]}>
+          Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to your .env file.
+        </Text>
       </View>
     );
   }
 
-  const { MapContainer, TileLayer, Marker, Popup, divIcon } = leaflet;
-  const WebMapContainer: any = MapContainer;
-  const WebTileLayer: any = TileLayer;
-  const WebMarker: any = Marker;
-  const WebPopup: any = Popup;
+  if (loadError) {
+    return (
+      <View style={[styles.stateContainer, isDarkMode && styles.darkCard]}>
+        <Text style={[styles.stateTitle, isDarkMode && styles.darkText]}>
+          Failed to load Google Maps
+        </Text>
+        <Text style={[styles.stateText, isDarkMode && styles.darkSubText]}>
+          Check your API key, enabled APIs, and website restrictions.
+        </Text>
+      </View>
+    );
+  }
 
-  const createCategoryIcon = (category?: string) => {
-    const color = getPinColor(category);
-
-    return divIcon({
-      className: '',
-      html: `
-        <div style="
-          position: relative;
-          width: 22px;
-          height: 22px;
-          background: ${color};
-          border: 3px solid white;
-          border-radius: 50% 50% 50% 0;
-          transform: rotate(-45deg);
-          box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-        ">
-          <div style="
-            position: absolute;
-            width: 8px;
-            height: 8px;
-            background: white;
-            border-radius: 50%;
-            top: 4px;
-            left: 4px;
-          "></div>
-        </div>
-      `,
-      iconSize: [22, 22],
-      iconAnchor: [11, 22],
-      popupAnchor: [0, -20],
-    });
-  };
+  if (!isLoaded) {
+    return (
+      <View style={[styles.stateContainer, isDarkMode && styles.darkCard]}>
+        <ActivityIndicator size="large" color="#2F70E9" />
+        <Text style={[styles.loadingText, isDarkMode && styles.darkSubText]}>
+          Loading map...
+        </Text>
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.mapWrapper}>
-      <WebMapContainer center={DEFAULT_CENTER} zoom={16} style={styles.map}>
-        <WebTileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution="&copy; OpenStreetMap contributors"
-        />
-
-        {validReports.map((report) => (
-          <WebMarker
-            key={report.id}
-            position={[report.latitude as number, report.longitude as number]}
-            icon={createCategoryIcon(report.category)}
+    <View style={styles.wrapper}>
+      <View style={[styles.filterRow, isDarkMode && styles.darkFilterRow]}>
+        {['All', 'Pending', 'In Progress', 'Under Review', 'Resolved'].map((item) => (
+          <Pressable
+            key={item}
+            onPress={() => setStatusFilter(item)}
+            style={[
+              styles.filterChip,
+              statusFilter === item && styles.activeChip,
+              isDarkMode && statusFilter !== item && styles.darkChip,
+            ]}
           >
-            <WebPopup>
-              <div style={{ minWidth: 150 }}>
-                <strong>{report.title || 'Report'}</strong>
-                <br />
-                <span>{report.category || 'Other'}</span>
-                <br />
-                <small>{report.location || 'No location'}</small>
-              </div>
-            </WebPopup>
-          </WebMarker>
+            <Text
+              style={[
+                styles.filterText,
+                statusFilter === item && styles.activeChipText,
+                isDarkMode && statusFilter !== item && styles.darkSubText,
+              ]}
+            >
+              {item}
+            </Text>
+          </Pressable>
         ))}
-      </WebMapContainer>
+      </View>
+
+      <View style={styles.mapArea}>
+        <GoogleMap
+          mapContainerStyle={mapContainerStyle}
+          center={center}
+          zoom={13}
+          options={{
+            streetViewControl: false,
+            mapTypeControl: false,
+            fullscreenControl: false,
+          }}
+        >
+          {filteredReports.map((report) => {
+            if (
+              typeof report.latitude !== 'number' ||
+              typeof report.longitude !== 'number'
+            ) {
+              return null;
+            }
+
+            return (
+              <Marker
+                key={report.id}
+                position={{
+                  lat: report.latitude,
+                  lng: report.longitude,
+                }}
+                onClick={() => setSelectedReport(report)}
+                icon={{
+                  path: window.google.maps.SymbolPath.CIRCLE,
+                  scale: 8,
+                  fillColor: getStatusColor(report.status),
+                  fillOpacity: 1,
+                  strokeColor: '#FFFFFF',
+                  strokeWeight: 2,
+                }}
+              />
+            );
+          })}
+
+          {selectedReport && (
+            <InfoWindow
+              position={{
+                lat: selectedReport.latitude,
+                lng: selectedReport.longitude,
+              }}
+              onCloseClick={() => setSelectedReport(null)}
+            >
+              <div style={{ maxWidth: 220 }}>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                  {selectedReport.title || 'Untitled Report'}
+                </div>
+                <div style={{ fontSize: 12, marginBottom: 4 }}>
+                  {selectedReport.category} • {selectedReport.status}
+                </div>
+                <div style={{ fontSize: 12, marginBottom: 4 }}>
+                  {selectedReport.location || selectedReport.coordinates.address}
+                </div>
+                <div style={{ fontSize: 12 }}>
+                  {selectedReport.description || 'No description provided.'}
+                </div>
+              </div>
+            </InfoWindow>
+          )}
+        </GoogleMap>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  mapWrapper: {
+  wrapper: {
     flex: 1,
   },
-  map: {
-    width: '100%',
-    height: '100%',
-  } as any,
-  loadingContainer: {
+  filterRow: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    right: 12,
+    zIndex: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  darkFilterRow: {},
+  filterChip: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  activeChip: {
+    backgroundColor: '#2F70E9',
+    borderColor: '#2F70E9',
+  },
+  darkChip: {
+    backgroundColor: '#1F2937',
+    borderColor: '#374151',
+  },
+  filterText: {
+    color: '#374151',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  activeChipText: {
+    color: '#FFFFFF',
+  },
+  mapArea: {
     flex: 1,
-    alignItems: 'center',
+  },
+  stateContainer: {
+    flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: 24,
+    backgroundColor: '#FFFFFF',
+  },
+  stateTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  stateText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
   },
   loadingText: {
     marginTop: 12,
     fontSize: 14,
     color: '#6B7280',
   },
+  darkCard: {
+    backgroundColor: '#1F2937',
+    borderColor: '#374151',
+  },
+  darkText: {
+    color: '#F9FAFB',
+  },
   darkSubText: {
-    color: '#9CA3AF',
+    color: '#D1D5DB',
   },
 });

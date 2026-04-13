@@ -1,5 +1,6 @@
+import { useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 
 type ReportMapItem = {
   id: string;
@@ -22,30 +23,69 @@ export default function AdminReportsMap({
   selectedReport,
   onSelectReport,
 }: Props) {
-  const defaultRegion = selectedReport
-    ? {
+  const mapRef = useRef<MapView | null>(null);
+
+  const defaultRegion: Region = useMemo(() => {
+    if (selectedReport) {
+      return {
         latitude: selectedReport.latitude,
         longitude: selectedReport.longitude,
         latitudeDelta: 0.02,
         longitudeDelta: 0.02,
-      }
-    : reports.length > 0
-    ? {
+      };
+    }
+
+    if (reports.length > 0) {
+      return {
         latitude: reports[0].latitude,
         longitude: reports[0].longitude,
         latitudeDelta: 0.05,
         longitudeDelta: 0.05,
-      }
-    : {
-        latitude: 14.676,
-        longitude: 121.043,
-        latitudeDelta: 0.08,
-        longitudeDelta: 0.08,
       };
+    }
+
+    return {
+      latitude: 14.676,
+      longitude: 121.043,
+      latitudeDelta: 0.08,
+      longitudeDelta: 0.08,
+    };
+  }, [reports, selectedReport]);
+
+  useEffect(() => {
+    if (!mapRef.current || !selectedReport) return;
+
+    mapRef.current.animateToRegion(
+      {
+        latitude: selectedReport.latitude,
+        longitude: selectedReport.longitude,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
+      },
+      500
+    );
+  }, [selectedReport]);
+
+  const getMarkerColor = (status: string) => {
+    const normalized = status.toLowerCase();
+
+    if (['resolved', 'completed', 'done'].includes(normalized)) return 'green';
+    if (['in progress', 'ongoing', 'processing'].includes(normalized)) return 'orange';
+    if (['pending', 'new'].includes(normalized)) return 'red';
+
+    return 'violet';
+  };
 
   return (
     <View style={styles.container}>
-      <MapView style={styles.map} initialRegion={defaultRegion}>
+      <MapView
+        ref={mapRef}
+        provider={PROVIDER_GOOGLE}
+        style={styles.map}
+        initialRegion={defaultRegion}
+        showsUserLocation={false}
+        showsMyLocationButton={false}
+      >
         {reports.map((report) => (
           <Marker
             key={report.id}
@@ -55,6 +95,7 @@ export default function AdminReportsMap({
             }}
             title={report.title}
             description={`${report.category} • ${report.status}`}
+            pinColor={getMarkerColor(report.status)}
             onPress={() => onSelectReport(report)}
           />
         ))}

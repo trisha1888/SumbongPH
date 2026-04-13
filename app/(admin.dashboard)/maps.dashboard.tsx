@@ -34,7 +34,7 @@ type ReportMapItem = {
   createdAt?: any;
 };
 
-const MapDashboard = () => {
+export default function MapDashboard() {
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
   const router = useRouter();
@@ -51,7 +51,7 @@ const MapDashboard = () => {
         const user = auth.currentUser;
 
         if (!user) {
-          setTimeout(() => router.replace('/login'), 0);
+          setTimeout(() => router.replace('/(login)/login' as any), 0);
           return;
         }
 
@@ -59,7 +59,7 @@ const MapDashboard = () => {
         const adminSnap = await getDoc(adminRef);
 
         if (!adminSnap.exists()) {
-          setTimeout(() => router.replace('/home.dashboard'), 0);
+          setTimeout(() => router.replace('/(home_dasborad)/home.dashboard' as any), 0);
           return;
         }
 
@@ -68,14 +68,14 @@ const MapDashboard = () => {
         if (adminData.active !== true) {
           await signOut(auth);
           Alert.alert('Access Denied', 'This admin account is inactive.');
-          setTimeout(() => router.replace('/login'), 0);
+          setTimeout(() => router.replace('/(login)/login' as any), 0);
           return;
         }
 
         setAdminName(adminData.name || 'Admin');
       } catch (error) {
         console.log('MAP ADMIN ACCESS ERROR:', error);
-        setTimeout(() => router.replace('/login'), 0);
+        setTimeout(() => router.replace('/(login)/login' as any), 0);
       } finally {
         setCheckingAccess(false);
       }
@@ -98,12 +98,16 @@ const MapDashboard = () => {
             const latitude =
               data.latitude ??
               data.lat ??
+              data.coordinates?.latitude ??
+              data.coordinates?.lat ??
               data.location?.latitude ??
               data.location?.lat;
 
             const longitude =
               data.longitude ??
               data.lng ??
+              data.coordinates?.longitude ??
+              data.coordinates?.lng ??
               data.location?.longitude ??
               data.location?.lng;
 
@@ -118,6 +122,7 @@ const MapDashboard = () => {
               status: data.status || 'Pending',
               address:
                 data.address ||
+                data.coordinates?.address ||
                 data.location?.address ||
                 data.barangay ||
                 'No address provided',
@@ -153,25 +158,21 @@ const MapDashboard = () => {
   }, []);
 
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await signOut(auth);
-              router.replace('/login');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to log out.');
-            }
-          },
+    Alert.alert('Logout', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut(auth);
+            router.replace('/(login)/login' as any);
+          } catch (error) {
+            Alert.alert('Error', 'Failed to log out.');
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const getStatusColor = (status: string) => {
@@ -244,27 +245,39 @@ const MapDashboard = () => {
 
           {isDesktop && (
             <View style={styles.navLinks}>
-              <TouchableOpacity onPress={() => router.push('/admin.dashboard')}>
+              <TouchableOpacity
+                onPress={() => router.push('/(admin.dashboard)/admin.dashboard' as any)}
+              >
                 <Text style={styles.navItem}>Overview</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={() => router.push('/complaints.dashboard')}>
+              <TouchableOpacity
+                onPress={() => router.push('/(admin.dashboard)/complaints.dashboard' as any)}
+              >
                 <Text style={styles.navItem}>Complaints</Text>
               </TouchableOpacity>
-<TouchableOpacity onPress={() => router.push('/(admin.dashboard)/admin.ideas')}><Text style={styles.navItem}>Ideas</Text></TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => router.push('/(admin.dashboard)/announcements.dashboard' as any)}
+              >
+                <Text style={styles.navItem}>Announcements</Text>
+              </TouchableOpacity>
+
               <View style={styles.activeTabWrapper}>
                 <Text style={styles.activeNavItem}>Map</Text>
               </View>
 
-              <TouchableOpacity onPress={() => router.push('/users.dashboard')}>
+              <TouchableOpacity
+                onPress={() => router.push('/(admin.dashboard)/users.dashboard' as any)}
+              >
                 <Text style={styles.navItem}>Users</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-  onPress={() => router.push('/(admin.dashboard)/analytics.dashboard')}
->
-  <Text style={styles.navItem}>Report Analytics</Text>
-</TouchableOpacity>
+                onPress={() => router.push('/(admin.dashboard)/analytics.dashboard' as any)}
+              >
+                <Text style={styles.navItem}>Report Analytics</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -376,7 +389,7 @@ const MapDashboard = () => {
       </ScrollView>
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FFF' },
@@ -403,20 +416,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 50,
   },
-  logo: { fontSize: 18, fontWeight: '900', letterSpacing: -0.5 },
-  navLinks: { flexDirection: 'row', gap: 30, alignItems: 'center' },
-  navItem: { fontSize: 13, color: '#AAA', fontWeight: '500' },
+  logo: {
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+    color: '#111827',
+  },
+  navLinks: {
+    flexDirection: 'row',
+    gap: 30,
+    alignItems: 'center',
+  },
+  navItem: {
+    fontSize: 13,
+    color: '#AAA',
+    fontWeight: '500',
+  },
   activeTabWrapper: {
     borderBottomWidth: 2,
     borderBottomColor: '#FF6B00',
     paddingBottom: 4,
   },
-  activeNavItem: { fontSize: 13, color: '#000', fontWeight: '700' },
-  userName: { fontSize: 13, fontWeight: '600' },
+  activeNavItem: {
+    fontSize: 13,
+    color: '#000',
+    fontWeight: '700',
+  },
+  userName: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
 
-  headerTitleContainer: { marginBottom: 24 },
-  mainTitle: { fontSize: 32, fontWeight: '800' },
-  subtitle: { fontSize: 14, color: '#6B7280' },
+  headerTitleContainer: {
+    marginBottom: 24,
+  },
+  mainTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
 
   summaryRow: {
     flexDirection: 'row',
@@ -552,5 +593,3 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
-
-export default MapDashboard;

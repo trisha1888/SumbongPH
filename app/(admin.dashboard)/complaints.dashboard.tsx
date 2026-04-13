@@ -213,7 +213,7 @@ const ComplaintsDashboard = () => {
             <View style={styles.navLinks}>
               <TouchableOpacity onPress={() => router.push('/(admin.dashboard)/admin.dashboard')}><Text style={styles.navItem}>Overview</Text></TouchableOpacity>
               <View style={styles.activeTabWrapper}><Text style={styles.activeNavItem}>Complaints</Text></View>
-<TouchableOpacity onPress={() => router.push('/(admin.dashboard)/admin.ideas')}><Text style={styles.navItem}>Ideas</Text></TouchableOpacity>
+<TouchableOpacity onPress={() => router.push('/(admin.dashboard)/announcements.dashboard')}><Text style={styles.navItem}>Announcements</Text></TouchableOpacity>
               <TouchableOpacity onPress={() => router.push('/(admin.dashboard)/maps.dashboard')}><Text style={styles.navItem}>Map</Text></TouchableOpacity>
               <TouchableOpacity onPress={() => router.push('/(admin.dashboard)/users.dashboard')}><Text style={styles.navItem}>Users</Text></TouchableOpacity>
                             <TouchableOpacity

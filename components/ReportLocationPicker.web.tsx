@@ -1,142 +1,226 @@
-import { ThemedText } from '@/components/themed-text';
-import 'leaflet/dist/leaflet.css';
-import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
-type Props = {
-  isDarkMode: boolean;
-  selectedLocation: {
-    latitude: number;
-    longitude: number;
-  } | null;
-  onLocationChange: (coords: { latitude: number; longitude: number }) => void;
-  title: string;
-  location: string;
+type PickerValue = {
+  latitude: number;
+  longitude: number;
+  address: string;
 };
 
-const DEFAULT_CENTER: [number, number] = [14.676, 121.0437];
+type Props = {
+  value?: PickerValue | null;
+  onLocationSelect: (value: PickerValue) => void;
+  height?: number;
+};
 
-export default function ReportLocationPickerWeb({
-  isDarkMode,
-  selectedLocation,
-  onLocationChange,
+declare global {
+  interface Window {
+    google: any;
+    initGoogleMap?: () => void;
+  }
+}
+
+const DEFAULT_CENTER = {
+  lat: 14.5995,
+  lng: 120.9842,
+};
+
+export default function ReportLocationPicker({
+  value,
+  onLocationSelect,
+  height = 320,
 }: Props) {
-  const [leaflet, setLeaflet] = useState<any>(null);
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const geocoderRef = useRef<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
+
+  const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   useEffect(() => {
-    let mounted = true;
+    if (!apiKey) {
+      setError('Missing EXPO_PUBLIC_GOOGLE_MAPS_API_KEY');
+      setLoading(false);
+      return;
+    }
 
-    const loadLeaflet = async () => {
-      if (typeof window === 'undefined') return;
+    const existingScript = document.getElementById('google-maps-script');
 
-      const leafletModule = await import('react-leaflet');
+    const initializeMap = () => {
+      if (!window.google || !mapRef.current) return;
 
-      if (!mounted) return;
+      const center = value
+        ? { lat: value.latitude, lng: value.longitude }
+        : DEFAULT_CENTER;
 
-      setLeaflet({
-        MapContainer: leafletModule.MapContainer,
-        TileLayer: leafletModule.TileLayer,
-        Marker: leafletModule.Marker,
-        useMapEvents: leafletModule.useMapEvents,
+      const map = new window.google.maps.Map(mapRef.current, {
+        center,
+        zoom: value ? 17 : 13,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true,
       });
+
+      const geocoder = new window.google.maps.Geocoder();
+
+      mapInstanceRef.current = map;
+      geocoderRef.current = geocoder;
+
+      if (value) {
+        markerRef.current = new window.google.maps.Marker({
+          position: center,
+          map,
+        });
+      }
+
+      map.addListener('click', async (event: any) => {
+        const lat = event.latLng.lat();
+        const lng = event.latLng.lng();
+
+        if (markerRef.current) {
+          markerRef.current.setMap(null);
+        }
+
+        markerRef.current = new window.google.maps.Marker({
+          position: { lat, lng },
+          map,
+        });
+
+        try {
+          const result = await reverseGeocode(lat, lng, geocoder);
+          onLocationSelect({
+            latitude: lat,
+            longitude: lng,
+            address: result,
+          });
+        } catch (err) {
+          onLocationSelect({
+            latitude: lat,
+            longitude: lng,
+            address: `${lat}, ${lng}`,
+          });
+        }
+      });
+
+      setLoading(false);
     };
 
-    loadLeaflet();
+    if (existingScript) {
+      if (window.google) {
+        initializeMap();
+      } else {
+        window.initGoogleMap = initializeMap;
+      }
+      return;
+    }
+
+    window.initGoogleMap = initializeMap;
+
+    const script = document.createElement('script');
+    script.id = 'google-maps-script';
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initGoogleMap`;
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => {
+      setError('Failed to load Google Maps script');
+      setLoading(false);
+    };
+
+    document.body.appendChild(script);
 
     return () => {
-      mounted = false;
+      if (window.initGoogleMap) {
+        delete window.initGoogleMap;
+      }
     };
-  }, []);
+  }, [apiKey]);
 
-  if (!leaflet) {
+  useEffect(() => {
+    if (!mapInstanceRef.current || !window.google || !value) return;
+
+    const position = {
+      lat: value.latitude,
+      lng: value.longitude,
+    };
+
+    mapInstanceRef.current.setCenter(position);
+    mapInstanceRef.current.setZoom(17);
+
+    if (markerRef.current) {
+      markerRef.current.setMap(null);
+    }
+
+    markerRef.current = new window.google.maps.Marker({
+      position,
+      map: mapInstanceRef.current,
+    });
+  }, [value?.latitude, value?.longitude]);
+
+  const reverseGeocode = (lat: number, lng: number, geocoder: any): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      geocoder.geocode(
+        { location: { lat, lng } },
+        (results: any[], status: string) => {
+          if (status === 'OK' && results && results.length > 0) {
+            resolve(results[0].formatted_address);
+          } else {
+            reject(new Error('No address found'));
+          }
+        }
+      );
+    });
+  };
+
+  if (error) {
     return (
-      <View style={[styles.loadingBox, isDarkMode && styles.darkBox]}>
-        <ThemedText style={[styles.loadingText, isDarkMode && styles.darkText]}>
-          Loading map...
-        </ThemedText>
+      <View style={[styles.wrapper, { height }]}>
+        <Text style={styles.errorText}>{error}</Text>
       </View>
     );
   }
 
-  const { MapContainer, TileLayer, Marker, useMapEvents } = leaflet;
-
-  function ClickHandler() {
-    useMapEvents({
-      click(e: any) {
-        onLocationChange({
-          latitude: e.latlng.lat,
-          longitude: e.latlng.lng,
-        });
-      },
-    });
-
-    return null;
-  }
-
-  const markerPosition = selectedLocation
-    ? ([selectedLocation.latitude, selectedLocation.longitude] as [number, number])
-    : null;
-
   return (
-    <View>
-      <ThemedText style={[styles.mapHint, isDarkMode && styles.darkSubText]}>
-        Click the map to place the exact issue location.
-      </ThemedText>
-
-      <View style={styles.mapWrapper}>
-        <MapContainer center={DEFAULT_CENTER} zoom={16} style={styles.map as any}>
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution="&copy; OpenStreetMap contributors"
-          />
-          <ClickHandler />
-          {markerPosition && <Marker position={markerPosition} />}
-        </MapContainer>
-      </View>
+    <View style={[styles.wrapper, { height }]}>
+      {loading && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" />
+          <Text style={styles.loadingText}>Loading Google Maps...</Text>
+        </View>
+      )}
+      <div ref={mapRef} style={{ width: '100%', height: '100%', borderRadius: 16 }} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  mapHint: {
-    fontSize: 13,
-    marginBottom: 10,
-    color: '#6B7280',
-  },
-  darkSubText: {
-    color: '#9CA3AF',
-  },
-  mapWrapper: {
+  wrapper: {
     width: '100%',
-    height: 240,
     borderRadius: 16,
     overflow: 'hidden',
-    marginBottom: 12,
+    backgroundColor: '#E5E7EB',
+    position: 'relative',
   },
-  map: {
-    width: '100%',
-    height: '100%',
-  },
-  loadingBox: {
-    width: '100%',
-    height: 140,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    justifyContent: 'center',
+  loadingOverlay: {
+    position: 'absolute',
+    zIndex: 10,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     alignItems: 'center',
-    marginBottom: 12,
-    backgroundColor: '#F9FAFB',
-  },
-  darkBox: {
-    backgroundColor: '#111827',
-    borderColor: '#374151',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    gap: 10,
   },
   loadingText: {
     fontSize: 14,
-    color: '#111827',
+    color: '#374151',
   },
-  darkText: {
-    color: '#F9FAFB',
+  errorText: {
+    color: '#B91C1C',
+    fontSize: 14,
+    padding: 16,
   },
 });

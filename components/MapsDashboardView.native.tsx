@@ -1,110 +1,30 @@
-import { ThemedText } from '@/components/themed-text';
-import { db } from '@/firebaseConfig';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import { StyleSheet, View } from 'react-native';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
-type Props = {
-  isDarkMode: boolean;
-};
-
-type ReportMapItem = {
-  id: string;
-  title?: string;
-  location?: string;
-  category?: string;
-  latitude?: number | null;
-  longitude?: number | null;
-};
-
-const DEFAULT_REGION = {
-  latitude: 14.676,
-  longitude: 121.0437,
-  latitudeDelta: 0.02,
-  longitudeDelta: 0.02,
-};
-
-export default function MapsDashboardViewNative({ isDarkMode }: Props) {
-  const [reports, setReports] = useState<ReportMapItem[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const unsubscribe = onSnapshot(
-      collection(db, 'reports'),
-      (snapshot) => {
-        const data: ReportMapItem[] = snapshot.docs.map((doc) => {
-          const raw = doc.data() as any;
-
-          return {
-            id: doc.id,
-            title: raw.title || 'Untitled Report',
-            location: raw.location || 'No location',
-            category: raw.category || 'Other',
-            latitude: typeof raw.latitude === 'number' ? raw.latitude : null,
-            longitude: typeof raw.longitude === 'number' ? raw.longitude : null,
-          };
-        });
-
-        setReports(data);
-        setLoading(false);
-      },
-      () => setLoading(false)
-    );
-
-    return () => unsubscribe();
-  }, []);
-
-  const validReports = useMemo(() => {
-    return reports.filter(
-      (report) =>
-        typeof report.latitude === 'number' &&
-        typeof report.longitude === 'number'
-    );
-  }, [reports]);
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2F70E9" />
-        <ThemedText style={[styles.loadingText, isDarkMode && styles.darkSubText]}>
-          Loading map reports...
-        </ThemedText>
-      </View>
-    );
-  }
-
+export default function MapsDashboardView() {
   return (
-    <MapView style={styles.map} initialRegion={DEFAULT_REGION}>
-      {validReports.map((report) => (
+    <View style={styles.container}>
+      <MapView
+        provider={PROVIDER_GOOGLE}
+        style={styles.map}
+        initialRegion={{
+          latitude: 14.5995,
+          longitude: 120.9842,
+          latitudeDelta: 0.05,
+          longitudeDelta: 0.05,
+        }}
+      >
         <Marker
-          key={report.id}
-          coordinate={{
-            latitude: report.latitude as number,
-            longitude: report.longitude as number,
-          }}
-          title={report.title || 'Report'}
-          description={`${report.category || 'Other'} • ${report.location || 'No location'}`}
+          coordinate={{ latitude: 14.5995, longitude: 120.9842 }}
+          title="Sample Report"
+          description="Working Google Map 🎉"
         />
-      ))}
-    </MapView>
+      </MapView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: { flex: 1 },
   map: { flex: 1 },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  darkSubText: {
-    color: '#9CA3AF',
-  },
 });

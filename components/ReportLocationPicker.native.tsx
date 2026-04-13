@@ -1,71 +1,150 @@
-import { ThemedText } from '@/components/themed-text';
-import { StyleSheet, View } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import MapView, { MapPressEvent, Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 
-type Props = {
-  isDarkMode: boolean;
-  selectedLocation: {
-    latitude: number;
-    longitude: number;
-  } | null;
-  onLocationChange: (coords: { latitude: number; longitude: number }) => void;
-  title: string;
-  location: string;
+type PickerValue = {
+  latitude: number;
+  longitude: number;
+  address: string;
 };
 
-const DEFAULT_BARANGAY_REGION = {
-  latitude: 14.676,
-  longitude: 121.0437,
+type Props = {
+  value?: PickerValue | null;
+  onLocationSelect: (value: PickerValue) => void;
+  height?: number;
+};
+
+const DEFAULT_REGION: Region = {
+  latitude: 14.5995,
+  longitude: 120.9842,
   latitudeDelta: 0.01,
   longitudeDelta: 0.01,
 };
 
-export default function ReportLocationPickerNative({
-  isDarkMode,
-  selectedLocation,
-  onLocationChange,
-  title,
-  location,
+export default function ReportLocationPicker({
+  value,
+  onLocationSelect,
+  height = 320,
 }: Props) {
-  return (
-    <View>
-      <ThemedText style={[styles.mapHint, isDarkMode && styles.darkSubText]}>
-        Tap the map to place the exact issue location.
-      </ThemedText>
+  const [isResolvingAddress, setIsResolvingAddress] = useState(false);
+  const mapRef = useRef<MapView | null>(null);
 
+  const region = useMemo<Region>(() => {
+    if (value) {
+      return {
+        latitude: value.latitude,
+        longitude: value.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+    }
+    return DEFAULT_REGION;
+  }, [value]);
+
+  const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  useEffect(() => {
+    if (value && mapRef.current) {
+      mapRef.current.animateToRegion(
+        {
+          latitude: value.latitude,
+          longitude: value.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        },
+        500
+      );
+    }
+  }, [value]);
+
+  const handleMapPress = async (event: MapPressEvent) => {
+    const { latitude, longitude } = event.nativeEvent.coordinate;
+
+    setIsResolvingAddress(true);
+
+    try {
+      let address = `${latitude}, ${longitude}`;
+
+      if (apiKey) {
+        const response = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}`
+        );
+        const data = await response.json();
+
+        if (data.status === 'OK' && data.results?.length > 0) {
+          address = data.results[0].formatted_address;
+        }
+      }
+
+      onLocationSelect({
+        latitude,
+        longitude,
+        address,
+      });
+    } catch (error) {
+      onLocationSelect({
+        latitude,
+        longitude,
+        address: `${latitude}, ${longitude}`,
+      });
+    } finally {
+      setIsResolvingAddress(false);
+    }
+  };
+
+  return (
+    <View style={[styles.wrapper, { height }]}>
       <MapView
-        style={styles.map}
-        initialRegion={DEFAULT_BARANGAY_REGION}
-        onPress={(event) => {
-          const { latitude, longitude } = event.nativeEvent.coordinate;
-          onLocationChange({ latitude, longitude });
-        }}
+        ref={mapRef}
+        provider={PROVIDER_GOOGLE}
+        style={StyleSheet.absoluteFill}
+        initialRegion={region}
+        onPress={handleMapPress}
       >
-        {selectedLocation && (
+        {value && (
           <Marker
-            coordinate={selectedLocation}
-            title={title || 'Reported Issue'}
-            description={location || 'Pinned location'}
+            coordinate={{
+              latitude: value.latitude,
+              longitude: value.longitude,
+            }}
+            title="Selected location"
+            description={value.address}
           />
         )}
       </MapView>
+
+      {isResolvingAddress && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="small" color="#fff" />
+          <Text style={styles.loadingText}>Getting address...</Text>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  mapHint: {
-    fontSize: 13,
-    marginBottom: 10,
-    color: '#6B7280',
-  },
-  darkSubText: {
-    color: '#9CA3AF',
-  },
-  map: {
+  wrapper: {
     width: '100%',
-    height: 240,
     borderRadius: 16,
-    marginBottom: 12,
+    overflow: 'hidden',
+    backgroundColor: '#E5E7EB',
+    position: 'relative',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#fff',
+    fontSize: 12,
   },
 });

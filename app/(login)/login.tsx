@@ -2,7 +2,11 @@ import { auth, db } from '@/firebaseConfig';
 import { getCurrentUserRole, getHomeRouteByRole } from '@/services/roleNavigation';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
-import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import {
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signOut,
+} from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import {
@@ -22,6 +26,38 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      Alert.alert('Required', 'Please enter your email first.');
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+
+      Alert.alert(
+        'Password Reset Sent',
+        'A password reset link has been sent to your email. Please check your Gmail.'
+      );
+    } catch (error: any) {
+      console.log('FORGOT PASSWORD ERROR:', error);
+
+      let message = 'Something went wrong. Please try again.';
+
+      if (error.code === 'auth/invalid-email') {
+        message = 'The email address is invalid.';
+      } else if (error.code === 'auth/user-not-found') {
+        message = 'No account was found with this email.';
+      } else if (error.code === 'auth/network-request-failed') {
+        message = 'Network error. Please check your internet connection.';
+      } else if (error.code === 'auth/too-many-requests') {
+        message = 'Too many attempts. Please try again later.';
+      }
+
+      Alert.alert('Reset Failed', message);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
@@ -151,7 +187,12 @@ export default function LoginScreen() {
                 onChangeText={setPassword}
                 editable={!loading}
               />
-              <TouchableOpacity style={styles.forgotPassword} disabled={loading}>
+
+              <TouchableOpacity
+                style={styles.forgotPassword}
+                onPress={handleForgotPassword}
+                disabled={loading}
+              >
                 <Text style={styles.blueLinkText}>Forgot Password?</Text>
               </TouchableOpacity>
             </View>
