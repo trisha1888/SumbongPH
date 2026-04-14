@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -30,6 +31,7 @@ type UserItem = {
   status?: string;
   disabled?: boolean;
   createdAt?: any;
+  profilePic?: string;
 };
 
 const UsersDashboard = () => {
@@ -68,6 +70,7 @@ const UsersDashboard = () => {
             status: data.status || (isDisabled ? 'Disabled' : 'Active'),
             disabled: isDisabled,
             createdAt: data.createdAt || null,
+            profilePic: data.profilePic || '',
           };
         });
 
@@ -206,7 +209,15 @@ const UsersDashboard = () => {
               >
                 <Text style={styles.navItem}>Complaints</Text>
               </TouchableOpacity>
-<TouchableOpacity onPress={() => router.push('/(admin.dashboard)/announcements.dashboard')}><Text style={styles.navItem}>Announcements</Text></TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() =>
+                  router.push('/(admin.dashboard)/announcements.dashboard')
+                }
+              >
+                <Text style={styles.navItem}>Announcements</Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 onPress={() =>
                   router.push('/(admin.dashboard)/maps.dashboard')
@@ -220,10 +231,12 @@ const UsersDashboard = () => {
               </View>
 
               <TouchableOpacity
-  onPress={() => router.push('/(admin.dashboard)/analytics.dashboard')}
->
-  <Text style={styles.navItem}>Report Analytics</Text>
-</TouchableOpacity>
+                onPress={() =>
+                  router.push('/(admin.dashboard)/analytics.dashboard')
+                }
+              >
+                <Text style={styles.navItem}>Report Analytics</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -287,16 +300,21 @@ const UsersDashboard = () => {
                   <View
                     style={[
                       styles.avatar,
-                      {
-                        backgroundColor: user.disabled
-                          ? '#E5E7EB'
-                          : '#FFE7C2',
+                      !user.profilePic && {
+                        backgroundColor: user.disabled ? '#E5E7EB' : '#FFE7C2',
                       },
                     ]}
                   >
-                    <Text style={styles.avatarText}>
-                      {getInitials(user.fullName)}
-                    </Text>
+                    {user.profilePic ? (
+                      <Image
+                        source={{ uri: user.profilePic }}
+                        style={styles.avatarImage}
+                      />
+                    ) : (
+                      <Text style={styles.avatarText}>
+                        {getInitials(user.fullName)}
+                      </Text>
+                    )}
                   </View>
 
                   <View style={{ marginLeft: 12 }}>
@@ -476,6 +494,12 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 21,
   },
   avatarText: {
     fontWeight: '700',

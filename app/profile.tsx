@@ -137,12 +137,14 @@ export default function ProfileScreen() {
         Alert.alert('Permission Denied', 'Need access to photos.');
         return;
       }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.7,
       });
+
       if (!result.canceled && result.assets && result.assets.length > 0 && result.assets[0].uri) {
         await uploadImage(result.assets[0].uri);
       }
@@ -152,24 +154,58 @@ export default function ProfileScreen() {
     }
   };
 
+  const uriToBlob = (uri: string): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.onload = function () {
+        resolve(xhr.response);
+      };
+      xhr.onerror = function () {
+        reject(new Error('Failed to convert image to blob.'));
+      };
+      xhr.responseType = 'blob';
+      xhr.open('GET', uri, true);
+      xhr.send(null);
+    });
+  };
+
   const uploadImage = async (uri: string) => {
     if (!docId || !auth.currentUser) {
       Alert.alert('Error', 'User not found.');
       return;
     }
+
     setUploading(true);
+
     try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      const blob = await uriToBlob(uri);
       const storage = getStorage();
       const fileRef = ref(storage, `profiles/${auth.currentUser.uid}.jpg`);
+
       await uploadBytes(fileRef, blob);
+
+      if ('close' in blob && typeof (blob as any).close === 'function') {
+        (blob as any).close();
+      }
+
       const downloadURL = await getDownloadURL(fileRef);
-      await updateDoc(doc(db, 'users', docId), { profilePic: downloadURL });
+      const finalURL = `${downloadURL}?t=${Date.now()}`;
+
+      await updateDoc(doc(db, 'users', docId), { profilePic: finalURL });
+
+      setUserProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              profilePic: finalURL,
+            }
+          : prev
+      );
+
       Alert.alert('Success', 'Photo updated!');
-    } catch (error) {
+    } catch (error: any) {
       console.log('UPLOAD ERROR:', error);
-      Alert.alert('Error', 'Upload failed.');
+      Alert.alert('Error', error?.message || 'Upload failed.');
     } finally {
       setUploading(false);
     }
@@ -254,20 +290,25 @@ export default function ProfileScreen() {
             </View>
 
             <View style={styles.divider} />
-            
+
             <View style={styles.menuItem}>
               <View style={styles.menuLeft}>
                 <Ionicons name="moon-outline" size={22} color={isDarkMode ? '#9CA3AF' : '#4B5563'} />
                 <ThemedText style={[styles.menuLabel, isDarkMode && styles.darkText]}>Dark Mode</ThemedText>
               </View>
-              <Switch value={isDarkMode} onValueChange={toggleDarkMode} trackColor={{ false: '#D1D5DB', true: '#2F70E9' }} thumbColor="#FFFFFF" />
+              <Switch
+                value={isDarkMode}
+                onValueChange={toggleDarkMode}
+                trackColor={{ false: '#D1D5DB', true: '#2F70E9' }}
+                thumbColor="#FFFFFF"
+              />
             </View>
 
             <View style={styles.divider} />
 
-            <TouchableOpacity 
-              style={styles.menuItem} 
-              onPress={() => router.push('/helpandsupport')} 
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/helpandsupport')}
               activeOpacity={0.7}
             >
               <View style={styles.menuLeft}>
@@ -296,11 +337,24 @@ export default function ProfileScreen() {
               </View>
               <ScrollView showsVerticalScrollIndicator={false}>
                 <ThemedText style={styles.inputLabel}>FULL NAME</ThemedText>
-                <TextInput style={[styles.modalInput, isDarkMode && styles.darkInput, { color: isDarkMode ? '#FFF' : '#000' }]} value={editName} onChangeText={setEditName} />
+                <TextInput
+                  style={[styles.modalInput, isDarkMode && styles.darkInput, { color: isDarkMode ? '#FFF' : '#000' }]}
+                  value={editName}
+                  onChangeText={setEditName}
+                />
                 <ThemedText style={styles.inputLabel}>MOBILE</ThemedText>
-                <TextInput style={[styles.modalInput, isDarkMode && styles.darkInput, { color: isDarkMode ? '#FFF' : '#000' }]} value={editMobile} onChangeText={setEditMobile} keyboardType="phone-pad" />
+                <TextInput
+                  style={[styles.modalInput, isDarkMode && styles.darkInput, { color: isDarkMode ? '#FFF' : '#000' }]}
+                  value={editMobile}
+                  onChangeText={setEditMobile}
+                  keyboardType="phone-pad"
+                />
                 <ThemedText style={styles.inputLabel}>BARANGAY</ThemedText>
-                <TextInput style={[styles.modalInput, isDarkMode && styles.darkInput, { color: isDarkMode ? '#FFF' : '#000' }]} value={editBarangay} onChangeText={setEditBarangay} />
+                <TextInput
+                  style={[styles.modalInput, isDarkMode && styles.darkInput, { color: isDarkMode ? '#FFF' : '#000' }]}
+                  value={editBarangay}
+                  onChangeText={setEditBarangay}
+                />
                 <TouchableOpacity style={styles.saveButton} onPress={handleSaveProfile} disabled={updating}>
                   {updating ? <ActivityIndicator color="white" /> : <ThemedText style={styles.saveButtonText}>Save Changes</ThemedText>}
                 </TouchableOpacity>
@@ -336,34 +390,125 @@ const styles = StyleSheet.create({
   centered: { justifyContent: 'center', alignItems: 'center' },
   content: { flex: 1, paddingHorizontal: 18, paddingTop: 65, paddingBottom: 110 },
   profileHeader: { alignItems: 'center', marginBottom: 30 },
-  avatar: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#7C83E6', alignItems: 'center', justifyContent: 'center', marginBottom: 12, overflow: 'hidden', position: 'relative' },
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#7C83E6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
   fullImage: { width: '100%', height: '100%' },
-  cameraIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#2F70E9', padding: 4, borderRadius: 10 },
+  cameraIconBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#2F70E9',
+    padding: 4,
+    borderRadius: 10,
+  },
   avatarText: { color: 'white', fontSize: 28, fontWeight: '700' },
   name: { fontSize: 30, fontWeight: '800', color: '#111827' },
   darkText: { color: '#F9FAFB' },
   location: { fontSize: 16, color: '#6B7280', marginBottom: 18 },
-  editButton: { backgroundColor: 'white', borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 20 },
+  editButton: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
   editButtonText: { color: '#4B5563', fontWeight: '600' },
-  menuCard: { backgroundColor: 'white', borderRadius: 18, borderWidth: 1, borderColor: '#E5E7EB', overflow: 'hidden' },
+  menuCard: {
+    backgroundColor: 'white',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    overflow: 'hidden',
+  },
   darkCard: { backgroundColor: '#1F2937', borderColor: '#374151' },
-  menuItem: { paddingHorizontal: 16, paddingVertical: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  menuItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   divider: { height: 1, backgroundColor: '#E5E7EB', marginHorizontal: 16 },
   menuLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
   menuLabel: { fontSize: 16, fontWeight: '500' },
   menuValue: { fontSize: 14, color: '#9CA3AF', textTransform: 'capitalize' },
   infoText: { fontSize: 13, color: '#6B7280' },
-  topLogoutButton: { position: 'absolute', top: 55, right: 18, width: 44, height: 44, borderRadius: 22, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { backgroundColor: 'white', borderRadius: 24, padding: 24, width: '100%', maxHeight: '80%' },
+  topLogoutButton: {
+    position: 'absolute',
+    top: 55,
+    right: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxHeight: '80%',
+  },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
   modalTitle: { fontSize: 20, fontWeight: '800' },
   inputLabel: { fontSize: 12, fontWeight: '700', color: '#6B7280', marginTop: 15 },
-  modalInput: { backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, padding: 12, marginTop: 5 },
+  modalInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 5,
+  },
   darkInput: { backgroundColor: '#111827', borderColor: '#374151' },
-  saveButton: { backgroundColor: '#2F70E9', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 25 },
+  saveButton: {
+    backgroundColor: '#2F70E9',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 25,
+  },
   saveButtonText: { color: 'white', fontWeight: 'bold' },
-  tabBar: { position: 'absolute', left: 16, right: 16, bottom: 50, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 30, paddingVertical: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: '#E5E7EB', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 8 },
+  tabBar: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 50,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 30,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 8,
+  },
   tabItem: { alignItems: 'center', flex: 1 },
   tabLabel: { marginTop: 4, fontSize: 10, fontWeight: '600' },
 });

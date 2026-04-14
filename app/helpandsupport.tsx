@@ -150,7 +150,7 @@ const HelpAndSupport = () => {
               <TipItem text="Provide the exact location or nearby landmarks" />
               <TipItem text="Be specific in your description (what, where, when)" />
               <TipItem text="Choose the correct category for proper routing" />
-              <TipItem text="For emergencies, always call 911 first" />
+              <TipItem text="For emergencies, always call 122 first" />
             </View>
           </>
         ) : activeTab === 'faq' ? (
@@ -196,7 +196,7 @@ const HelpAndSupport = () => {
 
             <FAQItem question="What types of issues can I report?">
               <Text style={styles.answerText}>
-                You can report: Noise disturbances, Infrastructure problems (roads, drainage, streetlights), Sanitation issues (garbage, flooding), Public safety concerns, Neighbor disputes, and other community issues. For emergencies, please call 911 directly.
+                You can report: Noise disturbances, Infrastructure problems (roads, drainage, streetlights), Sanitation issues (garbage, flooding), Public safety concerns, Neighbor disputes, and other community issues. For emergencies, please call 122 directly.
               </Text>
             </FAQItem>
 
