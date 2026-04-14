@@ -225,7 +225,7 @@ const ComplaintsDashboard = () => {
                             </TouchableOpacity>
             </View>
           )}
-          <Text style={styles.userName}>Kap. Roberto Santos</Text>
+          <Text style={styles.userName}>Cesar R. Dela Fuente, Jr.</Text>
         </View>
 
         <View style={styles.headerRow}>

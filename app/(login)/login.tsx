@@ -35,27 +35,12 @@ export default function LoginScreen() {
 
     try {
       await sendPasswordResetEmail(auth, email.trim());
-
       Alert.alert(
         'Password Reset Sent',
-        'A password reset link has been sent to your email. Please check your Gmail.'
+        'A password reset link has been sent to your email.'
       );
     } catch (error: any) {
-      console.log('FORGOT PASSWORD ERROR:', error);
-
-      let message = 'Something went wrong. Please try again.';
-
-      if (error.code === 'auth/invalid-email') {
-        message = 'The email address is invalid.';
-      } else if (error.code === 'auth/user-not-found') {
-        message = 'No account was found with this email.';
-      } else if (error.code === 'auth/network-request-failed') {
-        message = 'Network error. Please check your internet connection.';
-      } else if (error.code === 'auth/too-many-requests') {
-        message = 'Too many attempts. Please try again later.';
-      }
-
-      Alert.alert('Reset Failed', message);
+      Alert.alert('Reset Failed', 'Something went wrong. Please try again.');
     }
   };
 
@@ -67,70 +52,34 @@ export default function LoginScreen() {
 
     try {
       setLoading(true);
-
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        email.trim(),
-        password
-      );
-
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
       await user.reload();
 
-      // Check admin first
       const adminRef = doc(db, 'admin', user.uid);
       const adminSnap = await getDoc(adminRef);
 
       if (adminSnap.exists()) {
         const adminData = adminSnap.data();
-
         if (adminData.active === true) {
-          Alert.alert('Success', 'Admin logged in successfully.');
           router.replace('/admin.dashboard');
           return;
         }
-
         await signOut(auth);
         Alert.alert('Access Denied', 'This admin account is inactive.');
         return;
       }
 
-      // Normal users must have verified email
       if (!user.emailVerified) {
         await signOut(auth);
-        Alert.alert(
-          'Email Not Verified',
-          'Please check your Gmail and click the verification link before logging in.'
-        );
+        Alert.alert('Email Not Verified', 'Please check your Gmail.');
         return;
       }
 
       const role = await getCurrentUserRole();
-
-      Alert.alert('Success', 'Logged in successfully.');
       router.replace(getHomeRouteByRole(role));
     } catch (error: any) {
-      console.log('LOGIN ERROR:', error);
-
-      let message = 'Please check your email and password.';
-
-      if (error.code === 'auth/invalid-email') {
-        message = 'The email address is invalid.';
-      } else if (error.code === 'auth/user-not-found') {
-        message = 'No account was found with this email.';
-      } else if (error.code === 'auth/wrong-password') {
-        message = 'The password you entered is incorrect.';
-      } else if (error.code === 'auth/invalid-credential') {
-        message = 'Invalid email or password.';
-      } else if (error.code === 'auth/too-many-requests') {
-        message = 'Too many login attempts. Please try again later.';
-      } else if (error.code === 'permission-denied') {
-        message = 'Firestore access was denied.';
-      } else if (error.code === 'auth/network-request-failed') {
-        message = 'Network error. Please check your internet connection.';
-      }
-
-      Alert.alert('Login Failed', message);
+      Alert.alert('Login Failed', 'Please check your email and password.');
     } finally {
       setLoading(false);
     }
@@ -145,6 +94,7 @@ export default function LoginScreen() {
         style={{ flex: 1 }}
       >
         <SafeAreaView style={{ flex: 1 }}>
+          {/* TOP SECTION MOVED DOWN */}
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.replace('/(tabs)')}
@@ -155,9 +105,7 @@ export default function LoginScreen() {
 
           <View style={styles.header}>
             <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>
-              Sign in to continue reporting issues.
-            </Text>
+            <Text style={styles.subtitle}>Sign in to continue reporting issues.</Text>
           </View>
 
           <View style={styles.form}>
@@ -171,7 +119,6 @@ export default function LoginScreen() {
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
-                autoCorrect={false}
                 editable={!loading}
               />
             </View>
@@ -232,13 +179,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   backButton: {
-    marginTop: 10,
+    marginTop: 40, // Increased from 10 to 40 to move it down
     width: 40,
     height: 40,
     justifyContent: 'center',
   },
   header: {
-    marginTop: 20,
+    marginTop: 30, // Increased from 20 to 30 to move title down
     marginBottom: 40,
   },
   title: {
@@ -275,11 +222,16 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   signInButton: {
-    backgroundColor: '#2F70E9',
+    backgroundColor: '#3B82F6',
     padding: 18,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 10,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   disabledButton: {
     opacity: 0.7,
@@ -287,22 +239,24 @@ const styles = StyleSheet.create({
   buttonText: {
     color: 'white',
     fontWeight: '700',
-    fontSize: 16,
+    fontSize: 17,
   },
   blueLinkText: {
-    color: '#2F70E9',
+    color: '#3B82F6',
     fontSize: 14,
+    fontWeight: '500',
   },
   linkText: {
-    color: '#2F70E9',
+    color: '#3B82F6',
     fontWeight: '700',
   },
   footer: {
     marginTop: 'auto',
-    marginBottom: 30,
+    marginBottom: 100, 
     alignItems: 'center',
   },
   footerText: {
     color: '#6B7280',
+    fontSize: 15,
   },
 });
