@@ -1,4 +1,3 @@
-import { auth, db } from '@/firebaseConfig';
 import { getCurrentUserRole, getHomeRouteByRole } from '@/services/roleNavigation';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
@@ -20,12 +19,14 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { auth, db } from '../../firebaseConfig'; // Adjusted to relative path
 
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // Toggle state
 
   const handleForgotPassword = async () => {
     if (!email.trim()) {
@@ -94,7 +95,6 @@ export default function LoginScreen() {
         style={{ flex: 1 }}
       >
         <SafeAreaView style={{ flex: 1 }}>
-          {/* TOP SECTION MOVED DOWN */}
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.replace('/(tabs)')}
@@ -109,6 +109,7 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.form}>
+            {/* Email Group */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email Address</Text>
               <TextInput
@@ -123,17 +124,30 @@ export default function LoginScreen() {
               />
             </View>
 
+            {/* Password Group with Toggle */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your password"
-                placeholderTextColor="#9CA3AF"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-                editable={!loading}
-              />
+              <View style={styles.passwordWrapper}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                  editable={!loading}
+                />
+                <TouchableOpacity 
+                  style={styles.eyeIcon} 
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  <Ionicons 
+                    name={showPassword ? "eye-off" : "eye"} 
+                    size={22} 
+                    color="#6B7280" 
+                  />
+                </TouchableOpacity>
+              </View>
 
               <TouchableOpacity
                 style={styles.forgotPassword}
@@ -179,13 +193,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   backButton: {
-    marginTop: 40, // Increased from 10 to 40 to move it down
+    marginTop: 40,
     width: 40,
     height: 40,
     justifyContent: 'center',
   },
   header: {
-    marginTop: 30, // Increased from 20 to 30 to move title down
+    marginTop: 30,
     marginBottom: 40,
   },
   title: {
@@ -218,8 +232,30 @@ const styles = StyleSheet.create({
     color: '#111827',
     fontSize: 16,
   },
+  passwordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 16,
+    paddingRight: 50, // Ensures text doesn't hide under the eye icon
+    backgroundColor: '#FFFFFF',
+    color: '#111827',
+    fontSize: 16,
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 16,
+    height: '100%',
+    justifyContent: 'center',
+  },
   forgotPassword: {
     alignSelf: 'flex-end',
+    marginTop: 4,
   },
   signInButton: {
     backgroundColor: '#3B82F6',
@@ -252,7 +288,7 @@ const styles = StyleSheet.create({
   },
   footer: {
     marginTop: 'auto',
-    marginBottom: 100, 
+    marginBottom: 40, 
     alignItems: 'center',
   },
   footerText: {

@@ -26,6 +26,10 @@ export default function SignUpScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Visibility States
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const validatePassword = (value: string) => {
     return {
       length: value.length >= 12,
@@ -106,7 +110,6 @@ export default function SignUpScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={{ flex: 1 }}>
-        {/* BACK BUTTON MOVED DOWN */}
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.back()}
@@ -121,7 +124,6 @@ export default function SignUpScreen() {
           contentContainerStyle={{ paddingBottom: 60 }}
           keyboardShouldPersistTaps="handled"
         >
-          {/* HEADER MOVED DOWN */}
           <View style={styles.header}>
             <ThemedText type="title" style={styles.title}>
               Create Account
@@ -132,6 +134,7 @@ export default function SignUpScreen() {
           </View>
 
           <View style={styles.form}>
+            {/* Full Name */}
             <View style={styles.inputGroup}>
               <ThemedText style={styles.label}>Full Name</ThemedText>
               <TextInput
@@ -144,6 +147,7 @@ export default function SignUpScreen() {
               />
             </View>
 
+            {/* Mobile Number */}
             <View style={styles.inputGroup}>
               <ThemedText style={styles.label}>Mobile Number</ThemedText>
               <TextInput
@@ -157,6 +161,7 @@ export default function SignUpScreen() {
               />
             </View>
 
+            {/* Email Address */}
             <View style={styles.inputGroup}>
               <ThemedText style={styles.label}>Email Address</ThemedText>
               <TextInput
@@ -172,6 +177,7 @@ export default function SignUpScreen() {
               />
             </View>
 
+            {/* Barangay */}
             <View style={styles.inputGroup}>
               <ThemedText style={styles.label}>Barangay</ThemedText>
               <TextInput
@@ -184,17 +190,30 @@ export default function SignUpScreen() {
               />
             </View>
 
+            {/* Password with Eye Toggle */}
             <View style={styles.inputGroup}>
               <ThemedText style={styles.label}>Password</ThemedText>
-              <TextInput
-                style={styles.input}
-                secureTextEntry
-                placeholder="••••••••"
-                placeholderTextColor="#9CA3AF"
-                value={password}
-                onChangeText={setPassword}
-                editable={!loading}
-              />
+              <View style={styles.passwordWrapper}>
+                <TextInput
+                  style={styles.passwordInput}
+                  secureTextEntry={!showPassword}
+                  placeholder="••••••••"
+                  placeholderTextColor="#9CA3AF"
+                  value={password}
+                  onChangeText={setPassword}
+                  editable={!loading}
+                />
+                <TouchableOpacity 
+                  style={styles.eyeIcon} 
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  <Ionicons 
+                    name={showPassword ? "eye-off" : "eye"} 
+                    size={22} 
+                    color="#6B7280" 
+                  />
+                </TouchableOpacity>
+              </View>
 
               {password.length > 0 && (
                 <View style={styles.passwordRulesBox}>
@@ -217,17 +236,30 @@ export default function SignUpScreen() {
               )}
             </View>
 
+            {/* Confirm Password with Eye Toggle */}
             <View style={styles.inputGroup}>
               <ThemedText style={styles.label}>Confirm Password</ThemedText>
-              <TextInput
-                style={styles.input}
-                secureTextEntry
-                placeholder="••••••••"
-                placeholderTextColor="#9CA3AF"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                editable={!loading}
-              />
+              <View style={styles.passwordWrapper}>
+                <TextInput
+                  style={styles.passwordInput}
+                  secureTextEntry={!showConfirmPassword}
+                  placeholder="••••••••"
+                  placeholderTextColor="#9CA3AF"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  editable={!loading}
+                />
+                <TouchableOpacity 
+                  style={styles.eyeIcon} 
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  <Ionicons 
+                    name={showConfirmPassword ? "eye-off" : "eye"} 
+                    size={22} 
+                    color="#6B7280" 
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <TouchableOpacity
@@ -247,7 +279,6 @@ export default function SignUpScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* FOOTER POSITIONED UP */}
           <View style={styles.footer}>
             <ThemedText style={styles.footerText}>
               Already have an account?{' '}
@@ -272,10 +303,10 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'flex-start',
-    marginTop: 40, // Match the Login Screen "Move down" request
+    marginTop: 40,
   },
   header: { 
-    marginTop: 30, // Move title down as requested
+    marginTop: 30,
     marginBottom: 30 
   },
   title: { fontSize: 28, fontWeight: '800', color: '#111827' },
@@ -292,6 +323,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     color: '#111827',
   },
+  // Added for Password Toggle alignment
+  passwordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  passwordInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 15,
+    paddingRight: 50, // Space for the eye icon
+    fontSize: 16,
+    backgroundColor: '#FFFFFF',
+    color: '#111827',
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: 15,
+    height: '100%',
+    justifyContent: 'center',
+  },
   passwordRulesBox: {
     marginTop: 4,
     padding: 12,
@@ -304,7 +358,7 @@ const styles = StyleSheet.create({
   ruleValid: { color: '#16A34A' },
   ruleInvalid: { color: '#DC2626' },
   primaryButton: {
-    backgroundColor: '#3B82F6', // Vibrant blue to match Login
+    backgroundColor: '#3B82F6',
     padding: 18,
     borderRadius: 12,
     alignItems: 'center',
@@ -317,7 +371,7 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: 'white', fontWeight: '700', fontSize: 16 },
   footer: { 
-    marginTop: 40, // Increased to move it down from button
+    marginTop: 40,
     marginBottom: 20, 
     alignItems: 'center' 
   },
