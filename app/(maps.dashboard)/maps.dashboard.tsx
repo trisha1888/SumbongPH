@@ -15,10 +15,15 @@ export default function MapDashboard() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <SafeAreaView style={{ flex: 1 }}>
-        <View style={[styles.mapCanvas, isDarkMode && styles.darkMapCanvas]}>
-          <MapsDashboardView isDarkMode={isDarkMode} />
+        
+        {/* ✅ ADDED WRAPPER TO PUSH FILTERS DOWN */}
+        <View style={styles.mapWrapper}>
+          <View style={[styles.mapCanvas, isDarkMode && styles.darkMapCanvas]}>
+            <MapsDashboardView isDarkMode={isDarkMode} />
+          </View>
         </View>
 
+        {/* TAB BAR */}
         <View style={[styles.tabBar, isDarkMode && styles.darkTabBar]}>
           <TabIcon
             icon="home-outline"
@@ -76,31 +81,55 @@ function TabIcon({ icon, label, active, onPress }: TabIconProps) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
   darkContainer: { backgroundColor: '#111827' },
+
+  // ✅ NEW WRAPPER (moves filters down)
+  mapWrapper: {
+    flex: 1,
+    paddingTop: 25, // 🔥 THIS MOVES THE FILTER BUTTONS DOWN
+  },
+
   mapCanvas: {
     flex: 1,
   },
+
   darkMapCanvas: {
     backgroundColor: '#0F172A',
   },
+
   tabBar: {
     position: 'absolute',
-    left: 12,
-    right: 12,
-    bottom: 12,
+    left: 16,
+    right: 16,
+    bottom: 50,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
+    borderRadius: 30,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    borderRadius: 24,
-    paddingHorizontal: 10,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 8,
   },
+
   darkTabBar: {
     backgroundColor: '#1F2937',
     borderColor: '#374151',
   },
-  tabItem: { alignItems: 'center', flex: 1 },
-  tabLabel: { marginTop: 4, fontSize: 10, fontWeight: '600' },
+
+  tabItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+
+  tabLabel: {
+    marginTop: 4,
+    fontSize: 10,
+    fontWeight: '600',
+  },
 });

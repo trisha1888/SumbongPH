@@ -11,7 +11,7 @@ import {
 } from '@/services/reportService';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -98,11 +98,21 @@ export default function ReportsDashboard() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadReports(true)} />}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => loadReports(true)} />
+          }
         >
           <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.8}>
-              <Ionicons name="arrow-back" size={22} color={isDarkMode ? '#F9FAFB' : '#111827'} />
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => router.back()}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="arrow-back"
+                size={22}
+                color={isDarkMode ? '#F9FAFB' : '#111827'}
+              />
             </TouchableOpacity>
 
             <View style={styles.headerTextWrap}>
@@ -187,7 +197,10 @@ function ReportCard({ report }: { report: ReportItem }) {
           </View>
 
           <View style={styles.reportInfo}>
-            <ThemedText style={[styles.reportTitle, isDarkMode && styles.darkText]} numberOfLines={1}>
+            <ThemedText
+              style={[styles.reportTitle, isDarkMode && styles.darkText]}
+              numberOfLines={1}
+            >
               {report.title}
             </ThemedText>
             <ThemedText style={[styles.reportCode, isDarkMode && styles.darkSubText]}>
@@ -203,7 +216,10 @@ function ReportCard({ report }: { report: ReportItem }) {
         </View>
       </View>
 
-      <ThemedText style={[styles.reportDescription, isDarkMode && styles.darkSubText]} numberOfLines={3}>
+      <ThemedText
+        style={[styles.reportDescription, isDarkMode && styles.darkSubText]}
+        numberOfLines={3}
+      >
         {report.description}
       </ThemedText>
 
@@ -272,10 +288,13 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 30,
-  },
+
+scrollContent: {
+  paddingHorizontal: 20,
+  paddingTop: 50, // 👈 slightly more down
+  paddingBottom: 30,
+},
+
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',

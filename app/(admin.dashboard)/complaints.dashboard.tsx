@@ -235,12 +235,7 @@ const ComplaintsDashboard = () => {
           </View>
         </View>
 
-                <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.mainTitle}>Complaints Management</Text>
-            <Text style={styles.subtitle}>Review, assign, and resolve resident complaints.</Text>
-          </View>
-        </View>
+
 
         {/* Filters Section */}
         <View style={styles.filtersCard}>

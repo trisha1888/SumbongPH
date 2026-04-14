@@ -223,9 +223,6 @@ export default function HomeDashboard() {
   useEffect(() => {
     const announcementsRef = collection(db, 'announcements');
 
-    // ✅ FIX: removed where('isActive', '==', true)
-    // para kahit old docs na walang isActive ay mabasa pa rin,
-    // then sa filter na lang natin ihahandle.
     const announcementsQuery = query(
       announcementsRef,
       orderBy('createdAt', 'desc')
@@ -254,10 +251,8 @@ export default function HomeDashboard() {
         });
 
         const filteredAnnouncements = allAnnouncements.filter((item) => {
-          // hide only if explicitly false
           if (item.isActive === false) return false;
 
-          // ✅ FIX: if no scope, treat as public
           if (!item.scope || item.scope === 'all') return true;
 
           if (item.scope === 'barangay') {
@@ -269,7 +264,6 @@ export default function HomeDashboard() {
             return announcementBarangay === userBarangay;
           }
 
-          // fallback: allow unknown old values instead of hiding
           return true;
         });
 
@@ -416,7 +410,9 @@ export default function HomeDashboard() {
             <ThemedText style={[styles.sectionTitle, isDarkMode && styles.darkText]}>
               Announcements
             </ThemedText>
-            <TouchableOpacity onPress={() => router.push('/announcements' as any)}>
+            <TouchableOpacity
+              onPress={() => router.push('/users.announcement' as any)}
+            >
               <ThemedText style={styles.viewAll}>View All</ThemedText>
             </TouchableOpacity>
           </View>
@@ -635,7 +631,13 @@ const styles = StyleSheet.create({
   darkText: { color: '#F9FAFB' },
   darkSubText: { color: '#9CA3AF' },
   safeArea: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 110 },
+
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 45,
+    paddingBottom: 120,
+  },
+
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -758,32 +760,39 @@ const styles = StyleSheet.create({
   },
   footerItem: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 6 },
   footerText: { fontSize: 12, color: '#6B7280', flex: 1 },
+
   fab: {
     position: 'absolute',
     right: 20,
-    bottom: 98,
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    bottom: 150,
+    width: 45,
+    height: 45,
+    borderRadius: 28,
     backgroundColor: '#2F70E9',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 4,
+    elevation: 8,
   },
+
   tabBar: {
     position: 'absolute',
-    left: 12,
-    right: 12,
-    bottom: 12,
+    left: 16,
+    right: 16,
+    bottom: 50,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
+    borderRadius: 30,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    borderRadius: 24,
-    paddingHorizontal: 10,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 8,
   },
   tabItem: { alignItems: 'center', flex: 1 },
   tabLabel: { marginTop: 4, fontSize: 10, fontWeight: '600' },
