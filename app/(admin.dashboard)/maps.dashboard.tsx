@@ -26,6 +26,7 @@ import {
 type ReportMapItem = {
   id: string;
   title: string;
+  description: string;
   category: string;
   status: string;
   address: string;
@@ -118,6 +119,7 @@ export default function MapDashboard() {
             return {
               id: docSnap.id,
               title: data.title || data.description || 'Untitled Report',
+              description: data.description || 'No description provided.',
               category: data.category || 'Uncategorized',
               status: data.status || 'Pending',
               address:
@@ -361,6 +363,11 @@ export default function MapDashboard() {
                 <Text style={styles.detailMeta}>
                   {selectedReport.category} • {getRelativeTime(selectedReport.createdAt)}
                 </Text>
+
+                <View style={styles.detailBlock}>
+                  <Text style={styles.detailLabel}>Description</Text>
+                  <Text style={styles.detailValue}>{selectedReport.description}</Text>
+                </View>
 
                 <View style={styles.detailBlock}>
                   <Text style={styles.detailLabel}>Address</Text>

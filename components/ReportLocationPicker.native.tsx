@@ -11,6 +11,7 @@ import {
 import MapView, {
   MapPressEvent,
   Marker,
+  Polygon,
   PROVIDER_GOOGLE,
   Region,
 } from 'react-native-maps';
@@ -27,12 +28,45 @@ type Props = {
   height?: number;
 };
 
-const DEFAULT_REGION: Region = {
-  latitude: 14.5995,
-  longitude: 120.9842,
-  latitudeDelta: 0.01,
-  longitudeDelta: 0.01,
+type LatLng = {
+  latitude: number;
+  longitude: number;
 };
+
+const BARANGAY_MANGGA_POLYGON: LatLng[] = [
+  { latitude: 14.627500, longitude: 121.062050 },
+  { latitude: 14.627500, longitude: 121.063300 },
+  { latitude: 14.624150, longitude: 121.063300 },
+  { latitude: 14.624150, longitude: 121.062050 },
+];
+
+const DEFAULT_REGION: Region = {
+  latitude: 14.625825,
+  longitude: 121.062675,
+  latitudeDelta: 0.004,
+  longitudeDelta: 0.004,
+};
+
+function isPointInsidePolygon(point: LatLng, polygon: LatLng[]) {
+  const x = point.longitude;
+  const y = point.latitude;
+  let inside = false;
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].longitude;
+    const yi = polygon[i].latitude;
+    const xj = polygon[j].longitude;
+    const yj = polygon[j].latitude;
+
+    const intersect =
+      yi > y !== yj > y &&
+      x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
+}
 
 export default function ReportLocationPicker({
   value,
@@ -41,15 +75,22 @@ export default function ReportLocationPicker({
 }: Props) {
   const [isResolvingAddress, setIsResolvingAddress] = useState(false);
   const [isGettingCurrentLocation, setIsGettingCurrentLocation] = useState(false);
+  const [error, setError] = useState('');
   const mapRef = useRef<MapView | null>(null);
 
   const region = useMemo<Region>(() => {
-    if (value) {
+    if (
+      value &&
+      isPointInsidePolygon(
+        { latitude: value.latitude, longitude: value.longitude },
+        BARANGAY_MANGGA_POLYGON
+      )
+    ) {
       return {
         latitude: value.latitude,
         longitude: value.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
+        latitudeDelta: 0.004,
+        longitudeDelta: 0.004,
       };
     }
     return DEFAULT_REGION;
@@ -58,18 +99,10 @@ export default function ReportLocationPicker({
   const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   useEffect(() => {
-    if (value && mapRef.current) {
-      mapRef.current.animateToRegion(
-        {
-          latitude: value.latitude,
-          longitude: value.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        },
-        500
-      );
-    }
-  }, [value]);
+    if (!mapRef.current) return;
+
+    mapRef.current.animateToRegion(region, 500);
+  }, [region]);
 
   const getAddressFromCoords = async (latitude: number, longitude: number) => {
     let address = `${latitude}, ${longitude}`;
@@ -91,6 +124,21 @@ export default function ReportLocationPicker({
   const handleMapPress = async (event: MapPressEvent) => {
     const { latitude, longitude } = event.nativeEvent.coordinate;
 
+    const isAllowed = isPointInsidePolygon(
+      { latitude, longitude },
+      BARANGAY_MANGGA_POLYGON
+    );
+
+    if (!isAllowed) {
+      setError('You can only place the pin inside Barangay Mangga.');
+      Alert.alert(
+        'Outside allowed area',
+        'You can only place the pin inside Barangay Mangga.'
+      );
+      return;
+    }
+
+    setError('');
     setIsResolvingAddress(true);
 
     try {
@@ -100,12 +148,6 @@ export default function ReportLocationPicker({
         latitude,
         longitude,
         address,
-      });
-    } catch (error) {
-      onLocationSelect({
-        latitude,
-        longitude,
-        address: `${latitude}, ${longitude}`,
       });
     } finally {
       setIsResolvingAddress(false);
@@ -119,10 +161,7 @@ export default function ReportLocationPicker({
       const { status } = await Location.requestForegroundPermissionsAsync();
 
       if (status !== 'granted') {
-        Alert.alert(
-          'Permission Denied',
-          'Please allow location access to use your current location.'
-        );
+        Alert.alert('Permission Denied', 'Allow location access.');
         return;
       }
 
@@ -133,6 +172,20 @@ export default function ReportLocationPicker({
       const latitude = currentLocation.coords.latitude;
       const longitude = currentLocation.coords.longitude;
 
+      const isAllowed = isPointInsidePolygon(
+        { latitude, longitude },
+        BARANGAY_MANGGA_POLYGON
+      );
+
+      if (!isAllowed) {
+        setError('You are outside Barangay Mangga.');
+        Alert.alert(
+          'Outside allowed area',
+          'Your current location is outside Barangay Mangga.'
+        );
+        return;
+      }
+
       const address = await getAddressFromCoords(latitude, longitude);
 
       onLocationSelect({
@@ -141,19 +194,15 @@ export default function ReportLocationPicker({
         address,
       });
 
-      if (mapRef.current) {
-        mapRef.current.animateToRegion(
-          {
-            latitude,
-            longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          },
-          500
-        );
-      }
-    } catch (error) {
-      Alert.alert('Location Error', 'Failed to get your current location.');
+      mapRef.current?.animateToRegion(
+        {
+          latitude,
+          longitude,
+          latitudeDelta: 0.004,
+          longitudeDelta: 0.004,
+        },
+        500
+      );
     } finally {
       setIsGettingCurrentLocation(false);
     }
@@ -168,16 +217,27 @@ export default function ReportLocationPicker({
         initialRegion={region}
         onPress={handleMapPress}
       >
-        {value && (
-          <Marker
-            coordinate={{
-              latitude: value.latitude,
-              longitude: value.longitude,
-            }}
-            title="Selected location"
-            description={value.address}
-          />
-        )}
+        <Polygon
+          coordinates={BARANGAY_MANGGA_POLYGON}
+          strokeWidth={2}
+          strokeColor="rgba(47,112,233,0.95)"
+          fillColor="rgba(47,112,233,0.15)"
+        />
+
+        {value &&
+          isPointInsidePolygon(
+            { latitude: value.latitude, longitude: value.longitude },
+            BARANGAY_MANGGA_POLYGON
+          ) && (
+            <Marker
+              coordinate={{
+                latitude: value.latitude,
+                longitude: value.longitude,
+              }}
+              title="Selected location"
+              description={value.address}
+            />
+          )}
       </MapView>
 
       <TouchableOpacity
@@ -199,10 +259,15 @@ export default function ReportLocationPicker({
           <Text style={styles.loadingText}>Getting address...</Text>
         </View>
       )}
+
+      {!!error && (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
     </View>
   );
 }
-
 const styles = StyleSheet.create({
   wrapper: {
     width: '100%',
@@ -211,6 +276,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E7EB',
     position: 'relative',
   },
+
   locationButton: {
     position: 'absolute',
     right: 12,
@@ -222,11 +288,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   locationButtonText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
   },
+
   loadingOverlay: {
     position: 'absolute',
     top: 12,
@@ -239,8 +307,26 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
   },
+
   loadingText: {
     color: '#fff',
     fontSize: 12,
+  },
+
+  errorBox: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    right: 12,
+    backgroundColor: 'rgba(185, 28, 28, 0.92)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+
+  errorText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

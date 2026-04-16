@@ -1,4 +1,5 @@
 import { auth, db } from '@/firebaseConfig';
+import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import {
@@ -8,11 +9,16 @@ import {
   onSnapshot,
   orderBy,
   query,
+  serverTimestamp,
+  updateDoc,
 } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
+  Modal,
+  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -24,10 +30,18 @@ import {
 
 type ReportItem = {
   id: string;
+  reportCode: string;
   title: string;
   category: string;
   status: string;
+  location: string;
+  description: string;
+  complainant: string;
+  userEmail?: string;
+  mobileNumber?: string;
+  imageUrl?: string;
   createdAt?: any;
+  adminSeen?: boolean;
 };
 
 const AdminDashboard = () => {
@@ -45,6 +59,10 @@ const AdminDashboard = () => {
   const [inProgressCount, setInProgressCount] = useState(0);
   const [resolvedCount, setResolvedCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
+
+  const [notificationModalVisible, setNotificationModalVisible] = useState(false);
+  const [detailsModalVisible, setDetailsModalVisible] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<ReportItem | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -105,10 +123,18 @@ const AdminDashboard = () => {
 
           return {
             id: docSnap.id,
+            reportCode: data.reportCode || 'No Code',
             title: data.title || data.description || 'Untitled Report',
             category: data.category || 'Uncategorized',
             status: data.status || 'Pending',
+            location: data.location || data.coordinates?.address || 'No location provided',
+            description: data.description || 'No description provided.',
+            complainant: data.userName || data.userEmail || 'Unknown User',
+            userEmail: data.userEmail || '',
+            mobileNumber: data.mobileNumber || '',
+            imageUrl: data.imageUrl || '',
             createdAt: data.createdAt || null,
+            adminSeen: data.adminSeen ?? false,
           };
         });
 
@@ -136,18 +162,18 @@ const AdminDashboard = () => {
         });
 
         const pending = allReports.filter((item) =>
-          ['pending', 'new'].includes(item.status.toLowerCase())
+          ['pending', 'new'].includes(String(item.status).toLowerCase())
         );
 
         const inProgress = allReports.filter((item) =>
           ['in progress', 'ongoing', 'processing'].includes(
-            item.status.toLowerCase()
+            String(item.status).toLowerCase()
           )
         );
 
         const resolved = allReports.filter((item) =>
           ['resolved', 'completed', 'done'].includes(
-            item.status.toLowerCase()
+            String(item.status).toLowerCase()
           )
         );
 
@@ -167,8 +193,12 @@ const AdminDashboard = () => {
     return () => unsubscribe();
   }, [isMounted]);
 
-  const recentReports = useMemo(() => {
-    return reports.slice(0, 5);
+  const newReports = useMemo(() => {
+    return reports.filter(
+      (item) =>
+        ['pending', 'new'].includes(String(item.status).toLowerCase()) &&
+        item.adminSeen !== true
+    );
   }, [reports]);
 
   const stats = [
@@ -208,22 +238,30 @@ const AdminDashboard = () => {
     }
   };
 
-  const getStatusDotColor = (status: string) => {
-    const normalized = status.toLowerCase();
+  const markReportAsSeen = async (reportId: string) => {
+    try {
+      const reportRef = doc(db, 'reports', reportId);
+      await updateDoc(reportRef, {
+        adminSeen: true,
+        adminSeenAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.log('MARK AS SEEN ERROR:', error);
+    }
+  };
 
-    if (['resolved', 'completed', 'done'].includes(normalized)) {
-      return '#22C55E';
+  const openReportDetails = async (report: ReportItem) => {
+    if (report.adminSeen !== true) {
+      await markReportAsSeen(report.id);
     }
 
-    if (['in progress', 'ongoing', 'processing'].includes(normalized)) {
-      return '#F97316';
-    }
+    setSelectedReport({
+      ...report,
+      adminSeen: true,
+    });
 
-    if (['pending', 'new'].includes(normalized)) {
-      return '#3B82F6';
-    }
-
-    return '#9CA3AF';
+    setNotificationModalVisible(false);
+    setDetailsModalVisible(true);
   };
 
   if (!isMounted || checkingAccess) {
@@ -238,6 +276,7 @@ const AdminDashboard = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <Stack.Screen options={{ headerShown: false }} />
+
       <ScrollView
         style={styles.container}
         contentContainerStyle={
@@ -264,7 +303,8 @@ const AdminDashboard = () => {
 
               <TouchableOpacity
                 onPress={() =>
-router.push('/(admin.dashboard)/announcements.dashboard' as any)                }
+                  router.push('/(admin.dashboard)/announcements.dashboard' as any)
+                }
               >
                 <Text style={styles.navItem}>Announcements</Text>
               </TouchableOpacity>
@@ -295,9 +335,25 @@ router.push('/(admin.dashboard)/announcements.dashboard' as any)                
             </View>
           )}
 
-          <TouchableOpacity onPress={handleLogout}>
-            <Text style={styles.userName}>Logout • {adminName}</Text>
-          </TouchableOpacity>
+          <View style={styles.topRightActions}>
+            <TouchableOpacity
+              style={styles.notificationBell}
+              onPress={() => setNotificationModalVisible(true)}
+            >
+              <Ionicons name="notifications-outline" size={22} color="#111827" />
+              {newReports.length > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {newReports.length > 99 ? '99+' : newReports.length}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={handleLogout}>
+              <Text style={styles.userName}>Logout • {adminName}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.headerRow}>
@@ -340,56 +396,177 @@ router.push('/(admin.dashboard)/announcements.dashboard' as any)                
 
           <View style={styles.rightColumn}>
             <View style={styles.panel}>
-              <View style={styles.sectionHeader}>
-                <View>
-                  <Text style={styles.panelTitle}>Recent Activity</Text>
-                  <Text style={styles.panelSubtitle}>
-                    Latest reports received by the system
-                  </Text>
-                </View>
+              <Text style={styles.panelTitle}>Notifications</Text>
+              <Text style={styles.panelSubtitle}>
+                Use the bell icon above to view all new reports.
+              </Text>
 
-                <TouchableOpacity
-                  onPress={() =>
-                    router.push('/(admin.dashboard)/complaints.dashboard')
-                  }
-                >
-                  <Text style={styles.orangeLink}>View all</Text>
-                </TouchableOpacity>
+              <View style={styles.notificationInfoCard}>
+                <Ionicons name="notifications-outline" size={34} color="#F97316" />
+                <Text style={styles.notificationInfoTitle}>{newReports.length} New Reports</Text>
+                <Text style={styles.notificationInfoText}>
+                  Click the notification bell to open the full list of newly submitted reports.
+                </Text>
               </View>
-
-              {loadingDashboard ? (
-                <View style={styles.centerState}>
-                  <ActivityIndicator size="small" color="#FF6B00" />
-                  <Text style={styles.stateText}>Loading recent reports...</Text>
-                </View>
-              ) : recentReports.length === 0 ? (
-                <View style={styles.centerState}>
-                  <Text style={styles.stateText}>No reports found.</Text>
-                </View>
-              ) : (
-                <View style={styles.listCard}>
-                  {recentReports.map((item) => (
-                    <View key={item.id} style={styles.activityRow}>
-                      <View
-                        style={[
-                          styles.activityDot,
-                          { backgroundColor: getStatusDotColor(item.status) },
-                        ]}
-                      />
-                      <View style={styles.activityTextWrap}>
-                        <Text style={styles.activityTitle}>{item.title}</Text>
-                        <Text style={styles.activityMeta}>
-                          {item.category} • {item.status} • {getRelativeTime(item.createdAt)}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
             </View>
           </View>
         </View>
       </ScrollView>
+
+      <Modal visible={notificationModalVisible} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setNotificationModalVisible(false)}>
+          <Pressable style={styles.notificationModalCard}>
+            <View style={styles.detailsHeader}>
+              <Text style={styles.modalTitle}>Notifications</Text>
+              <TouchableOpacity onPress={() => setNotificationModalVisible(false)}>
+                <Ionicons name="close" size={22} color="#374151" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.notificationSubtitle}>
+              New reports submitted by users
+            </Text>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {loadingDashboard ? (
+                <View style={styles.centerState}>
+                  <ActivityIndicator size="small" color="#FF6B00" />
+                  <Text style={styles.stateText}>Loading notifications...</Text>
+                </View>
+              ) : newReports.length === 0 ? (
+                <View style={styles.centerState}>
+                  <Ionicons name="notifications-off-outline" size={30} color="#9CA3AF" />
+                  <Text style={styles.stateText}>No new reports right now.</Text>
+                </View>
+              ) : (
+                <View style={styles.notificationList}>
+                  {newReports.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.notificationItem}
+                      activeOpacity={0.9}
+                      onPress={() => openReportDetails(item)}
+                    >
+                      <View style={styles.notificationItemIcon}>
+                        <Ionicons name="document-text-outline" size={20} color="#F97316" />
+                      </View>
+
+                      <View style={styles.notificationItemTextWrap}>
+                        <Text style={styles.notificationItemTitle}>{item.title}</Text>
+                        <Text style={styles.notificationItemMeta}>
+                          {item.category} • {item.status} • {getRelativeTime(item.createdAt)}
+                        </Text>
+                        <Text style={styles.notificationItemReporter}>
+                          Reported by: {item.complainant}
+                        </Text>
+                      </View>
+
+                      <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={detailsModalVisible} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setDetailsModalVisible(false)}>
+          <Pressable style={styles.detailsModalCard}>
+            <View style={styles.detailsHeader}>
+              <Text style={styles.modalTitle}>Report Details</Text>
+              <TouchableOpacity onPress={() => setDetailsModalVisible(false)}>
+                <Ionicons name="close" size={22} color="#374151" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {selectedReport && (
+                <>
+                  <View style={styles.detailBlock}>
+                    <Text style={styles.detailLabel}>Report Code</Text>
+                    <Text style={styles.detailValue}>{selectedReport.reportCode}</Text>
+                  </View>
+
+                  <View style={styles.detailBlock}>
+                    <Text style={styles.detailLabel}>Title</Text>
+                    <Text style={styles.detailValue}>{selectedReport.title}</Text>
+                  </View>
+
+                  <View style={styles.detailGrid}>
+                    <View style={styles.detailGridItem}>
+                      <Text style={styles.detailLabel}>Category</Text>
+                      <Text style={styles.detailValue}>{selectedReport.category}</Text>
+                    </View>
+
+                    <View style={styles.detailGridItem}>
+                      <Text style={styles.detailLabel}>Status</Text>
+                      <Text style={styles.detailValue}>{selectedReport.status}</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.detailBlock}>
+                    <Text style={styles.detailLabel}>Reporter Name</Text>
+                    <Text style={styles.detailValue}>{selectedReport.complainant}</Text>
+                  </View>
+
+                  <View style={styles.detailBlock}>
+                    <Text style={styles.detailLabel}>Reporter Email</Text>
+                    <Text style={styles.detailValue}>
+                      {selectedReport.userEmail || 'No email provided'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailBlock}>
+                    <Text style={styles.detailLabel}>Mobile Number</Text>
+                    <Text style={styles.detailValue}>
+                      {selectedReport.mobileNumber || 'No mobile number provided'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailBlock}>
+                    <Text style={styles.detailLabel}>Location</Text>
+                    <Text style={styles.detailValue}>{selectedReport.location}</Text>
+                  </View>
+
+                  <View style={styles.detailBlock}>
+                    <Text style={styles.detailLabel}>Description</Text>
+                    <Text style={styles.detailValue}>{selectedReport.description}</Text>
+                  </View>
+
+                  <View style={styles.detailBlock}>
+                    <Text style={styles.detailLabel}>Proof Image</Text>
+                    {selectedReport.imageUrl ? (
+                      <Image
+                        source={{ uri: selectedReport.imageUrl }}
+                        style={styles.proofImage}
+                      />
+                    ) : (
+                      <View style={styles.noImageBox}>
+                        <Ionicons name="image-outline" size={28} color="#9CA3AF" />
+                        <Text style={styles.noImageText}>No proof image uploaded.</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.openComplaintButton}
+                    onPress={() => {
+                      setDetailsModalVisible(false);
+                      router.push('/(admin.dashboard)/complaints.dashboard');
+                    }}
+                  >
+                    <Text style={styles.openComplaintButtonText}>
+                      Open Complaints Page
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -444,6 +621,40 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#111827',
     fontWeight: '700',
+  },
+
+  topRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  notificationBell: {
+    position: 'relative',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  notificationBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
   },
   userName: {
     fontSize: 13,
@@ -546,16 +757,26 @@ const styles = StyleSheet.create({
     color: '#F97316',
   },
 
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 4,
+  notificationInfoCard: {
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    backgroundColor: '#FFF7ED',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
   },
-  orangeLink: {
-    fontSize: 12,
-    color: '#F97316',
-    fontWeight: '700',
+  notificationInfoTitle: {
+    marginTop: 12,
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  notificationInfoText: {
+    marginTop: 8,
+    fontSize: 13,
+    textAlign: 'center',
+    color: '#6B7280',
+    lineHeight: 20,
   },
 
   centerState: {
@@ -569,32 +790,143 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
 
-  listCard: {
-    gap: 14,
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
-  activityRow: {
+  notificationModalCard: {
+    width: '100%',
+    maxWidth: 520,
+    maxHeight: '85%',
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    padding: 20,
+  },
+  notificationSubtitle: {
+    marginTop: -8,
+    marginBottom: 14,
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  notificationList: {
+    gap: 12,
+  },
+  notificationItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 6,
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
   },
-  activityDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  notificationItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFF7ED',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  activityTextWrap: {
+  notificationItemTextWrap: {
     flex: 1,
   },
-  activityTitle: {
+  notificationItemTitle: {
     fontSize: 13,
     fontWeight: '700',
     color: '#111827',
   },
-  activityMeta: {
+  notificationItemMeta: {
     marginTop: 3,
     fontSize: 11,
     color: '#6B7280',
+  },
+  notificationItemReporter: {
+    marginTop: 3,
+    fontSize: 11,
+    color: '#9CA3AF',
+  },
+
+  detailsModalCard: {
+    width: '100%',
+    maxWidth: 520,
+    maxHeight: '85%',
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    padding: 20,
+  },
+  detailsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  detailBlock: {
+    marginBottom: 16,
+  },
+  detailGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  detailGridItem: {
+    flex: 1,
+  },
+  detailLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6B7280',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#111827',
+    lineHeight: 21,
+  },
+  proofImage: {
+    width: '100%',
+    height: 220,
+    borderRadius: 14,
+    resizeMode: 'cover',
+    marginTop: 6,
+  },
+  noImageBox: {
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+    borderRadius: 14,
+    paddingVertical: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  noImageText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  openComplaintButton: {
+    marginTop: 8,
+    backgroundColor: '#2563EB',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  openComplaintButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -26,10 +27,41 @@ declare global {
   }
 }
 
+const BARANGAY_MANGGA_POLYGON = [
+  { lat: 14.627500, lng: 121.062050 },
+  { lat: 14.627500, lng: 121.063300 },
+  { lat: 14.624150, lng: 121.063300 },
+  { lat: 14.624150, lng: 121.062050 },
+];
+
 const DEFAULT_CENTER = {
-  lat: 14.5995,
-  lng: 120.9842,
+  lat: 14.625825,
+  lng: 121.062675,
 };
+
+function isPointInsidePolygon(
+  point: { lat: number; lng: number },
+  polygon: { lat: number; lng: number }[]
+) {
+  const x = point.lng;
+  const y = point.lat;
+  let inside = false;
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].lng;
+    const yi = polygon[i].lat;
+    const xj = polygon[j].lng;
+    const yj = polygon[j].lat;
+
+    const intersect =
+      yi > y !== yj > y &&
+      x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
+}
 
 export default function ReportLocationPicker({
   value,
@@ -40,6 +72,7 @@ export default function ReportLocationPicker({
   const mapInstanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const geocoderRef = useRef<any>(null);
+  const polygonRef = useRef<any>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
@@ -79,6 +112,51 @@ export default function ReportLocationPicker({
     });
   };
 
+  const fitMapToAllowedArea = () => {
+    if (!window.google || !mapInstanceRef.current) return;
+
+    const bounds = new window.google.maps.LatLngBounds();
+
+    BARANGAY_MANGGA_POLYGON.forEach((point) => {
+      bounds.extend(point);
+    });
+
+    mapInstanceRef.current.fitBounds(bounds, 40);
+  };
+
+  const handlePointSelection = async (lat: number, lng: number) => {
+    if (!geocoderRef.current) return;
+
+    const isAllowed = isPointInsidePolygon({ lat, lng }, BARANGAY_MANGGA_POLYGON);
+
+    if (!isAllowed) {
+      setError('You can only place the pin inside Barangay Mangga.');
+      Alert.alert(
+        'Outside allowed area',
+        'You can only place the pin inside Barangay Mangga.'
+      );
+      return;
+    }
+
+    setError('');
+    placeMarker(lat, lng);
+
+    try {
+      const address = await reverseGeocode(lat, lng, geocoderRef.current);
+      onLocationSelect({
+        latitude: lat,
+        longitude: lng,
+        address,
+      });
+    } catch {
+      onLocationSelect({
+        latitude: lat,
+        longitude: lng,
+        address: `${lat}, ${lng}`,
+      });
+    }
+  };
+
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser.');
@@ -98,11 +176,23 @@ export default function ReportLocationPicker({
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
 
+        const isAllowed = isPointInsidePolygon({ lat, lng }, BARANGAY_MANGGA_POLYGON);
+
+        if (!isAllowed) {
+          setError('Your current location is outside Barangay Mangga.');
+          setIsGettingLocation(false);
+          Alert.alert(
+            'Outside allowed area',
+            'Your current location is outside Barangay Mangga.'
+          );
+          return;
+        }
+
         const map = mapInstanceRef.current;
         const geocoder = geocoderRef.current;
 
         map.setCenter({ lat, lng });
-        map.setZoom(17);
+        map.setZoom(18);
 
         placeMarker(lat, lng);
 
@@ -114,7 +204,7 @@ export default function ReportLocationPicker({
             longitude: lng,
             address,
           });
-        } catch (err) {
+        } catch {
           onLocationSelect({
             latitude: lat,
             longitude: lng,
@@ -146,13 +236,18 @@ export default function ReportLocationPicker({
     const initializeMap = () => {
       if (!window.google || !mapRef.current) return;
 
-      const center = value
-        ? { lat: value.latitude, lng: value.longitude }
-        : DEFAULT_CENTER;
+      const center =
+        value &&
+        isPointInsidePolygon(
+          { lat: value.latitude, lng: value.longitude },
+          BARANGAY_MANGGA_POLYGON
+        )
+          ? { lat: value.latitude, lng: value.longitude }
+          : DEFAULT_CENTER;
 
       const map = new window.google.maps.Map(mapRef.current, {
         center,
-        zoom: value ? 17 : 13,
+        zoom: 17,
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: true,
@@ -163,33 +258,40 @@ export default function ReportLocationPicker({
       mapInstanceRef.current = map;
       geocoderRef.current = geocoder;
 
-      if (value) {
+      polygonRef.current = new window.google.maps.Polygon({
+        paths: BARANGAY_MANGGA_POLYGON,
+        strokeColor: '#2F70E9',
+        strokeOpacity: 0.95,
+        strokeWeight: 2,
+        fillColor: '#2F70E9',
+        fillOpacity: 0.15,
+        clickable: false,
+      });
+
+      polygonRef.current.setMap(map);
+
+      fitMapToAllowedArea();
+
+      if (
+        value &&
+        isPointInsidePolygon(
+          { lat: value.latitude, lng: value.longitude },
+          BARANGAY_MANGGA_POLYGON
+        )
+      ) {
         markerRef.current = new window.google.maps.Marker({
-          position: center,
+          position: { lat: value.latitude, lng: value.longitude },
           map,
         });
+        map.setCenter({ lat: value.latitude, lng: value.longitude });
+        map.setZoom(18);
       }
 
       map.addListener('click', async (event: any) => {
+        if (!event.latLng) return;
         const lat = event.latLng.lat();
         const lng = event.latLng.lng();
-
-        placeMarker(lat, lng);
-
-        try {
-          const result = await reverseGeocode(lat, lng, geocoder);
-          onLocationSelect({
-            latitude: lat,
-            longitude: lng,
-            address: result,
-          });
-        } catch (err) {
-          onLocationSelect({
-            latitude: lat,
-            longitude: lng,
-            address: `${lat}, ${lng}`,
-          });
-        }
+        await handlePointSelection(lat, lng);
       });
 
       setLoading(false);
@@ -235,19 +337,14 @@ export default function ReportLocationPicker({
       lng: value.longitude,
     };
 
-    mapInstanceRef.current.setCenter(position);
-    mapInstanceRef.current.setZoom(17);
+    if (!isPointInsidePolygon(position, BARANGAY_MANGGA_POLYGON)) {
+      return;
+    }
 
+    mapInstanceRef.current.setCenter(position);
+    mapInstanceRef.current.setZoom(18);
     placeMarker(value.latitude, value.longitude);
   }, [value?.latitude, value?.longitude]);
-
-  if (error) {
-    return (
-      <View style={[styles.wrapper, { height }]}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    );
-  }
 
   return (
     <View style={[styles.wrapper, { height }]}>
@@ -276,6 +373,12 @@ export default function ReportLocationPicker({
       </View>
 
       <div ref={mapRef} style={{ width: '100%', height: '100%', borderRadius: 16 }} />
+
+      {!!error && !loading && (
+        <View style={styles.inlineErrorBox}>
+          <Text style={styles.inlineErrorText}>{error}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -304,11 +407,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#374151',
   },
-  errorText: {
-    color: '#B91C1C',
-    fontSize: 14,
-    padding: 16,
-  },
   topActions: {
     position: 'absolute',
     right: 12,
@@ -331,5 +429,21 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
+  },
+  inlineErrorBox: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    top: 12,
+    zIndex: 30,
+    backgroundColor: 'rgba(185, 28, 28, 0.92)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  inlineErrorText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

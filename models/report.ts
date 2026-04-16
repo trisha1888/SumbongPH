@@ -51,14 +51,13 @@ export type ReportItem = {
   userEmail: string;
   mobileNumber: string;
 
-  // 🔥 timestamps (firebase)
+  imageUrl?: string;
+
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 
-  // 🔥 analytics
   resolvedAt?: Timestamp;
 
-  // 🔥 notifications (future)
   isRead?: boolean;
 };
 
@@ -75,4 +74,7 @@ export type NewReportInput = {
   coordinates: ReportCoordinates;
 
   urgency: ReportUrgency;
+
+  // proof image
+  imageUrl?: string;
 };

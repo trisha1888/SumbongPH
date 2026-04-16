@@ -8,11 +8,14 @@ import {
 } from '@/models/report';
 import { submitReport } from '@/services/reportService';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   SafeAreaView,
   ScrollView,
@@ -22,6 +25,7 @@ import {
   View,
 } from 'react-native';
 import ReportLocationPicker from '../components/ReportLocationPicker';
+import { auth, storage } from '../firebaseConfig';
 import { useTheme } from './ThemeContext';
 
 type SelectedLocation = {
@@ -65,7 +69,55 @@ export default function EditReportScreen() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [submittedReportCode, setSubmittedReportCode] = useState('');
 
+  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
+
   const categoryMeta = CATEGORY_META[category];
+
+  const pickImage = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permission.granted) {
+        Alert.alert(
+          'Permission Required',
+          'Please allow gallery access so you can upload a proof image.'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        setSelectedImageUri(result.assets[0].uri);
+      }
+    } catch (error) {
+      Alert.alert('Image Error', 'Failed to pick image.');
+    }
+  };
+
+  const uploadReportImage = async (uri: string) => {
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+      throw new Error('User is not logged in.');
+    }
+
+    const response = await fetch(uri);
+    const blob = await response.blob();
+
+    const fileName = `report_proofs/${currentUser.uid}/${Date.now()}.jpg`;
+    const storageRef = ref(storage, fileName);
+
+    await uploadBytes(storageRef, blob);
+    const downloadURL = await getDownloadURL(storageRef);
+
+    return downloadURL;
+  };
 
   const handleSubmit = async () => {
     if (!title.trim()) {
@@ -91,6 +143,12 @@ export default function EditReportScreen() {
     try {
       setSubmitting(true);
 
+      let imageUrl = '';
+
+      if (selectedImageUri) {
+        imageUrl = await uploadReportImage(selectedImageUri);
+      }
+
       const result = await submitReport({
         category,
         title: title.trim(),
@@ -104,10 +162,18 @@ export default function EditReportScreen() {
           address: location.trim(),
         },
         urgency,
+        imageUrl,
       });
 
       setSubmittedReportCode(result.reportCode);
       setShowSuccessModal(true);
+
+      setTitle('');
+      setLocation('');
+      setUrgency('Medium');
+      setDescription('');
+      setSelectedLocation(null);
+      setSelectedImageUri(null);
     } catch (error: any) {
       Alert.alert(
         'Submission Failed',
@@ -277,6 +343,37 @@ export default function EditReportScreen() {
               numberOfLines={6}
               textAlignVertical="top"
             />
+
+            <ThemedText style={[styles.label, isDarkMode && styles.darkSubText]}>
+              Upload Proof Image
+            </ThemedText>
+
+            <TouchableOpacity
+              style={[styles.uploadButton, isDarkMode && styles.darkInput]}
+              onPress={pickImage}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="image-outline" size={20} color="#2F70E9" />
+              <ThemedText style={[styles.uploadButtonText, isDarkMode && styles.darkText]}>
+                {selectedImageUri ? 'Change Proof Image' : 'Choose Proof Image'}
+              </ThemedText>
+            </TouchableOpacity>
+
+            <ThemedText style={[styles.helperText, isDarkMode && styles.darkSubText]}>
+              Upload a clear image so the admin can review your report properly.
+            </ThemedText>
+
+            {selectedImageUri && (
+              <View style={styles.imagePreviewWrapper}>
+                <Image source={{ uri: selectedImageUri }} style={styles.imagePreview} />
+                <TouchableOpacity
+                  style={styles.removeImageButton}
+                  onPress={() => setSelectedImageUri(null)}
+                >
+                  <Ionicons name="close-circle" size={24} color="#DC2626" />
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           <TouchableOpacity
@@ -518,6 +615,47 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 15,
     color: '#111827',
+  },
+
+  uploadButton: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderStyle: 'dashed',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    marginTop: 4,
+  },
+
+  uploadButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+  },
+
+  imagePreviewWrapper: {
+    marginTop: 12,
+    position: 'relative',
+  },
+
+  imagePreview: {
+    width: '100%',
+    height: 220,
+    borderRadius: 16,
+    resizeMode: 'cover',
+  },
+
+  removeImageButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
   },
 
   submitButton: {

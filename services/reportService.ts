@@ -162,6 +162,7 @@ const mapReportDoc = (doc: any): ReportItem => {
     userName: data.userName || '',
     userEmail: data.userEmail || '',
     mobileNumber: data.mobileNumber || '',
+    imageUrl: data.imageUrl || '',
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
     resolvedAt: data.resolvedAt,
@@ -203,6 +204,7 @@ export const submitReport = async (
     userEmail: profile.email,
     barangay: profile.barangay,
     mobileNumber: profile.mobileNumber,
+    imageUrl: input.imageUrl || '',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
