@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "sumbongph",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.jayrichardrala.sumbongph",
@@ -63,9 +63,11 @@
       "reactCompiler": false
     },
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "f6eabe63-a1bb-4c60-85f6-60124ffe3c3c"
+        "projectId": "6e6bf20f-56a5-4fb2-b592-6344107a2554"
       }
-    }
+    },
+    "owner": "trish0618"
   }
 }
