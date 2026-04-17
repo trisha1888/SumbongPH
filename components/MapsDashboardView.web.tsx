@@ -23,12 +23,14 @@ const libraries: ('places')[] = ['places'];
 
 function getStatusColor(status: string) {
   switch (status) {
+    case 'Pending':
+      return 'blue';
     case 'Resolved':
       return 'green';
     case 'In Progress':
-      return 'blue';
-    case 'Under Review':
       return 'orange';
+    case 'Under Review':
+      return 'gray';
     default:
       return 'red';
   }

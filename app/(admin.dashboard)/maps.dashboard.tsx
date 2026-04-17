@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -33,6 +34,7 @@ type ReportMapItem = {
   latitude: number;
   longitude: number;
   createdAt?: any;
+  imageUrl?: string;
 };
 
 export default function MapDashboard() {
@@ -131,6 +133,7 @@ export default function MapDashboard() {
               latitude,
               longitude,
               createdAt: data.createdAt || null,
+              imageUrl: data.imageUrl || data.photoUrl || data.proofImage || '',
             };
           })
           .filter(Boolean) as ReportMapItem[];
@@ -183,6 +186,7 @@ export default function MapDashboard() {
     if (['resolved', 'completed', 'done'].includes(normalized)) return '#22C55E';
     if (['in progress', 'ongoing', 'processing'].includes(normalized)) return '#FF6B00';
     if (['pending', 'new'].includes(normalized)) return '#3B82F6';
+    if (['under review', 'reviewing'].includes(normalized)) return '#A855F7';
 
     return '#9CA3AF';
   };
@@ -358,6 +362,20 @@ export default function MapDashboard() {
                     {selectedReport.status}
                   </Text>
                 </View>
+
+                {selectedReport.imageUrl ? (
+                  <View style={styles.imageWrap}>
+                    <Image
+                      source={{ uri: selectedReport.imageUrl }}
+                      style={styles.reportImage}
+                      resizeMode="cover"
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.noImageBox}>
+                    <Text style={styles.noImageText}>No photo attached</Text>
+                  </View>
+                )}
 
                 <Text style={styles.detailTitle}>{selectedReport.title}</Text>
                 <Text style={styles.detailMeta}>
@@ -572,6 +590,34 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
+  },
+  imageWrap: {
+    width: '100%',
+    height: 200,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 14,
+    backgroundColor: '#F3F4F6',
+  },
+  reportImage: {
+    width: '100%',
+    height: '100%',
+  },
+  noImageBox: {
+    width: '100%',
+    height: 120,
+    borderRadius: 14,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  noImageText: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontWeight: '600',
   },
   detailTitle: {
     fontSize: 18,
