@@ -29,7 +29,7 @@
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyAXhUb4bxSE0Lu4UoFExnyoFmU2fr7oW8E"
+          "apiKey": "YOUR_ANDROID_GOOGLE_MAPS_API_KEY"
         }
       }
     },
@@ -64,8 +64,10 @@
     },
     "extra": {
       "eas": {
-        "projectId": "f6eabe63-a1bb-4c60-85f6-60124ffe3c3c"
-      }
-    }
+        "projectId": "9bddbab6-c6fb-40f6-8a5e-ea43a7d5331f"
+      },
+      "router": {}
+    },
+    "owner": "jayrichardrala"
   }
 }
