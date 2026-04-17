@@ -1,32 +1,43 @@
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import {
-  REPORT_CATEGORIES,
-  REPORT_URGENCY_LEVELS,
-  ReportCategory,
-  ReportUrgency,
-} from '@/models/report';
-import { submitReport } from '@/services/reportService';
-import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
-  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
   View,
+  Platform,
+  useWindowDimensions,
 } from 'react-native';
-import ReportLocationPicker from '../components/ReportLocationPicker';
-import { auth, storage } from '../firebaseConfig';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+
+// --- UI Components & Context ---
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
 import { useTheme } from './ThemeContext';
+import ReportLocationPicker from '../components/ReportLocationPicker';
+
+// --- Firebase & Services ---
+import { auth, storage } from '../firebaseConfig';
+import { submitReport } from '@/services/reportService';
+import {
+  REPORT_CATEGORIES,
+  REPORT_URGENCY_LEVELS,
+  ReportCategory,
+  ReportUrgency,
+} from '@/models/report';
+
+// --- Styling Constants ---
+const PRIMARY_BLUE = '#3B82F6';
+const SLATE_400 = '#94A3B8';
+const SLATE_600 = '#475569';
 
 type SelectedLocation = {
   latitude: number;
@@ -34,754 +45,335 @@ type SelectedLocation = {
   address: string;
 };
 
-const CATEGORY_META: Record<
-  ReportCategory,
-  { icon: keyof typeof Ionicons.glyphMap; bg: string; color: string }
-> = {
-  Flood: { icon: 'cloud-outline', bg: '#EEF2FF', color: '#4F46E5' },
-  Garbage: { icon: 'trash-outline', bg: '#F0FDF4', color: '#16A34A' },
-  Road: { icon: 'construct-outline', bg: '#FFF7ED', color: '#EA580C' },
-  Streetlight: { icon: 'bulb-outline', bg: '#FEFCE8', color: '#CA8A04' },
-  Noise: { icon: 'volume-high-outline', bg: '#FAF5FF', color: '#9333EA' },
-  Safety: { icon: 'alert-circle-outline', bg: '#FEF2F2', color: '#DC2626' },
-  Other: { icon: 'help-circle-outline', bg: '#F9FAFB', color: '#4B5563' },
+const CATEGORY_META: Record<ReportCategory, { icon: keyof typeof Ionicons.glyphMap; color: string; bg: string }> = {
+  Flood: { icon: 'cloud-outline', color: '#4F46E5', bg: '#EEF2FF' },
+  Garbage: { icon: 'trash-outline', color: '#16A34A', bg: '#F0FDF4' },
+  Road: { icon: 'construct-outline', color: '#EA580C', bg: '#FFF7ED' },
+  Streetlight: { icon: 'bulb-outline', color: '#CA8A04', bg: '#FEFCE8' },
+  Noise: { icon: 'volume-high-outline', color: '#9333EA', bg: '#FAF5FF' },
+  Safety: { icon: 'alert-circle-outline', color: '#DC2626', bg: '#FEF2F2' },
+  Other: { icon: 'help-circle-outline', color: '#4B5563', bg: '#F9FAFB' },
 };
 
 export default function EditReportScreen() {
   const router = useRouter();
   const { isDarkMode } = useTheme();
+  const { width } = useWindowDimensions();
   const params = useLocalSearchParams<{ category?: string }>();
 
+  const isDesktop = width > 768;
+
+  // --- Form State ---
   const initialCategory = useMemo<ReportCategory>(() => {
-    const fromParams = params.category;
-    const matched = REPORT_CATEGORIES.find((item) => item === fromParams);
+    const matched = REPORT_CATEGORIES.find((item) => item === params.category);
     return matched || 'Other';
   }, [params.category]);
 
   const [category] = useState<ReportCategory>(initialCategory);
   const [title, setTitle] = useState('');
   const [location, setLocation] = useState('');
-  const [urgency, setUrgency] = useState<ReportUrgency>('Medium');
+  const [urgency, setUrgency] = useState<ReportUrgency>('Low');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
-
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [submittedReportCode, setSubmittedReportCode] = useState('');
-
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
 
-  const categoryMeta = CATEGORY_META[category];
+  const meta = CATEGORY_META[category];
+
+  const triggerHaptic = () => {
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
 
   const pickImage = async () => {
     try {
+      triggerHaptic();
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
       if (!permission.granted) {
-        Alert.alert(
-          'Permission Required',
-          'Please allow gallery access so you can upload a proof image.'
-        );
+        Alert.alert('Permission Required', 'Gallery access is needed to upload proof.');
         return;
       }
-
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
       });
-
       if (!result.canceled && result.assets.length > 0) {
         setSelectedImageUri(result.assets[0].uri);
       }
     } catch (error) {
-      Alert.alert('Image Error', 'Failed to pick image.');
+      Alert.alert('Image Error', 'Failed to access gallery.');
     }
-  };
-
-  const uploadReportImage = async (uri: string) => {
-    const currentUser = auth.currentUser;
-
-    if (!currentUser) {
-      throw new Error('User is not logged in.');
-    }
-
-    const response = await fetch(uri);
-    const blob = await response.blob();
-
-    const fileName = `report_proofs/${currentUser.uid}/${Date.now()}.jpg`;
-    const storageRef = ref(storage, fileName);
-
-    await uploadBytes(storageRef, blob);
-    const downloadURL = await getDownloadURL(storageRef);
-
-    return downloadURL;
   };
 
   const handleSubmit = async () => {
-    if (!title.trim()) {
-      Alert.alert('Missing Title', 'Please enter a short title for your report.');
+    if (!title.trim() || !selectedLocation || !description.trim()) {
+      Alert.alert('Missing Info', 'Please complete all fields and select a location.');
       return;
     }
-
-    if (!location.trim()) {
-      Alert.alert('Missing Location', 'Please enter the street or place name.');
-      return;
-    }
-
-    if (!selectedLocation) {
-      Alert.alert('Missing Pin Location', 'Please pin the exact issue location on the map.');
-      return;
-    }
-
-    if (!description.trim()) {
-      Alert.alert('Missing Description', 'Please describe the issue before submitting.');
-      return;
-    }
-
     try {
       setSubmitting(true);
-
       let imageUrl = '';
-
       if (selectedImageUri) {
-        imageUrl = await uploadReportImage(selectedImageUri);
+        const response = await fetch(selectedImageUri);
+        const blob = await response.blob();
+        const storageRef = ref(storage, `report_proofs/${auth.currentUser?.uid}/${Date.now()}.jpg`);
+        await uploadBytes(storageRef, blob);
+        imageUrl = await getDownloadURL(storageRef);
       }
 
-      const result = await submitReport({
+      await submitReport({
         category,
         title: title.trim(),
         description: description.trim(),
         location: location.trim(),
         latitude: selectedLocation.latitude,
         longitude: selectedLocation.longitude,
-        coordinates: {
-          latitude: selectedLocation.latitude,
-          longitude: selectedLocation.longitude,
-          address: location.trim(),
-        },
+        coordinates: { ...selectedLocation, address: location.trim() },
         urgency,
         imageUrl,
       });
 
-      setSubmittedReportCode(result.reportCode);
-      setShowSuccessModal(true);
-
-      setTitle('');
-      setLocation('');
-      setUrgency('Medium');
-      setDescription('');
-      setSelectedLocation(null);
-      setSelectedImageUri(null);
+      router.replace('/(reports_dashboard)/reports.dashboard');
     } catch (error: any) {
-      Alert.alert(
-        'Submission Failed',
-        error?.message || 'Something went wrong while submitting your report.'
-      );
+      Alert.alert('Error', error?.message || 'Submission failed.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleViewMyReports = () => {
-    setShowSuccessModal(false);
-    router.replace('/(reports_dashboard)/reports.dashboard');
-  };
-
   return (
     <ThemedView style={[styles.container, isDarkMode && styles.darkContainer]}>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: 'Create Report',
-          headerTitleAlign: 'left',
-          presentation: 'modal',
-          headerStyle: {
-            backgroundColor: isDarkMode ? '#111827' : '#F9FAFB',
-          },
-          headerTintColor: isDarkMode ? '#F9FAFB' : '#111827',
-          headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 8 }}>
-              <Ionicons
-                name="arrow-back"
-                size={24}
-                color={isDarkMode ? '#F9FAFB' : '#111827'}
-              />
-            </TouchableOpacity>
-          ),
-        }}
-      />
+      <Stack.Screen options={{ headerShown: false }} />
 
-      <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={[styles.card, isDarkMode && styles.darkCard]}>
-            <View style={styles.categoryRow}>
-              <View style={[styles.categoryBadge, { backgroundColor: categoryMeta.bg }]}>
-                <Ionicons name={categoryMeta.icon} size={22} color={categoryMeta.color} />
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <ThemedText style={[styles.label, isDarkMode && styles.darkSubText]}>
-                  Category
-                </ThemedText>
-                <ThemedText style={[styles.categoryValue, isDarkMode && styles.darkText]}>
-                  {category}
-                </ThemedText>
-              </View>
+      <SafeAreaView style={styles.safeArea}>
+        
+        {/* --- FIXED STICKY HEADER --- */}
+        <View style={[
+          styles.headerWrapper, 
+          { backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF' }
+        ]}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={isDarkMode ? 'white' : 'black'} />
+          </TouchableOpacity>
+          <View>
+            <ThemedText style={[styles.headerTitle, isDarkMode && styles.whiteText]}>Create Report</ThemedText>
+            <View style={[styles.categoryBadge, { backgroundColor: meta.bg }]}>
+              <Ionicons name={meta.icon} size={12} color={meta.color} />
+              <ThemedText style={[styles.categoryBadgeText, { color: meta.color }]}>
+                {category.toUpperCase()}
+              </ThemedText>
             </View>
+          </View>
+        </View>
 
-            <View style={[styles.divider, isDarkMode && styles.darkDivider]} />
+        {/* --- SCROLLABLE BODY --- */}
+        <ScrollView 
+          contentContainerStyle={[styles.scrollArea, isDesktop && styles.desktopScrollArea]} 
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Map Section */}
+          <View style={styles.mapContainer}>
+            <ReportLocationPicker
+              value={selectedLocation}
+              onLocationSelect={(picked: SelectedLocation) => {
+                if (picked) {
+                  triggerHaptic();
+                  setSelectedLocation(picked);
+                  setLocation(picked.address || "");
+                }
+              }}
+              height={isDesktop ? 400 : 260}
+            />
+          </View>
 
-            <ThemedText style={[styles.label, isDarkMode && styles.darkSubText]}>
-              Report Title
-            </ThemedText>
+          {/* Priority Levels */}
+          <ThemedText style={styles.sectionLabel}>PRIORITY LEVEL</ThemedText>
+          <View style={styles.priorityRow}>
+            {REPORT_URGENCY_LEVELS.map((level) => {
+              const isActive = urgency === level;
+              return (
+                <TouchableOpacity
+                  key={level}
+                  onPress={() => { triggerHaptic(); setUrgency(level); }}
+                  style={[styles.priorityTab, isActive && styles.priorityTabActive]}
+                >
+                  <ThemedText style={[styles.priorityText, isActive && styles.priorityTextActive]}>
+                    {level}
+                  </ThemedText>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Report Title */}
+          <View style={styles.inputPod}>
+            <ThemedText style={styles.cardLabel}>REPORT TITLE</ThemedText>
             <TextInput
-              style={[styles.input, isDarkMode && styles.darkInput, isDarkMode && styles.darkText]}
-              placeholder="Example: Flooded road near barangay hall"
-              placeholderTextColor="#9CA3AF"
+              style={styles.registryInput}
+              placeholder="Summary of the incident..."
+              placeholderTextColor={SLATE_400}
               value={title}
               onChangeText={setTitle}
             />
-
-            <ThemedText style={[styles.label, isDarkMode && styles.darkSubText]}>
-              Street / Place Name
-            </ThemedText>
-            <View style={[styles.inputRow, isDarkMode && styles.darkInput]}>
-              <Ionicons name="location-outline" size={20} color="#9CA3AF" />
-              <TextInput
-                style={[styles.flexInput, isDarkMode && styles.darkText]}
-                placeholder="Selected address will appear here"
-                placeholderTextColor="#9CA3AF"
-                value={location}
-                onChangeText={setLocation}
-                multiline
-              />
-            </View>
-
-            <ThemedText style={[styles.label, isDarkMode && styles.darkSubText]}>
-              Pin Exact Location
-            </ThemedText>
-
-            <ReportLocationPicker
-              value={selectedLocation}
-              onLocationSelect={(pickedLocation: SelectedLocation) => {
-                setSelectedLocation(pickedLocation);
-                setLocation(pickedLocation.address);
-              }}
-              height={320}
-            />
-
-            <ThemedText style={[styles.helperText, isDarkMode && styles.darkSubText]}>
-              Tap the map to drop a pin and auto-fill the address.
-            </ThemedText>
-
-            {selectedLocation && (
-              <View style={[styles.coordinatesBox, isDarkMode && styles.darkInput]}>
-                <ThemedText style={[styles.coordinatesText, isDarkMode && styles.darkText]}>
-                  Latitude: {selectedLocation.latitude.toFixed(6)}
-                </ThemedText>
-                <ThemedText style={[styles.coordinatesText, isDarkMode && styles.darkText]}>
-                  Longitude: {selectedLocation.longitude.toFixed(6)}
-                </ThemedText>
-                <ThemedText style={[styles.coordinatesText, isDarkMode && styles.darkText]}>
-                  Address: {selectedLocation.address}
-                </ThemedText>
-              </View>
-            )}
-
-            <ThemedText style={[styles.label, isDarkMode && styles.darkSubText]}>
-              Urgency Level
-            </ThemedText>
-            <View style={styles.urgencyRow}>
-              {REPORT_URGENCY_LEVELS.map((level) => {
-                const active = urgency === level;
-
-                return (
-                  <TouchableOpacity
-                    key={level}
-                    style={[
-                      styles.urgencyTab,
-                      isDarkMode && styles.darkInput,
-                      active && styles.activeUrgency,
-                    ]}
-                    onPress={() => setUrgency(level)}
-                    activeOpacity={0.8}
-                  >
-                    <ThemedText
-                      style={[
-                        styles.urgencyText,
-                        isDarkMode && styles.darkSubText,
-                        active && styles.activeUrgencyText,
-                      ]}
-                    >
-                      {level}
-                    </ThemedText>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <ThemedText style={[styles.label, isDarkMode && styles.darkSubText]}>
-              Description
-            </ThemedText>
-            <TextInput
-              style={[
-                styles.textArea,
-                isDarkMode && styles.darkInput,
-                isDarkMode && styles.darkText,
-              ]}
-              placeholder="Describe the issue clearly so the admin can review it."
-              placeholderTextColor="#9CA3AF"
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              numberOfLines={6}
-              textAlignVertical="top"
-            />
-
-            <ThemedText style={[styles.label, isDarkMode && styles.darkSubText]}>
-              Upload Proof Image
-            </ThemedText>
-
-            <TouchableOpacity
-              style={[styles.uploadButton, isDarkMode && styles.darkInput]}
-              onPress={pickImage}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="image-outline" size={20} color="#2F70E9" />
-              <ThemedText style={[styles.uploadButtonText, isDarkMode && styles.darkText]}>
-                {selectedImageUri ? 'Change Proof Image' : 'Choose Proof Image'}
-              </ThemedText>
-            </TouchableOpacity>
-
-            <ThemedText style={[styles.helperText, isDarkMode && styles.darkSubText]}>
-              Upload a clear image so the admin can review your report properly.
-            </ThemedText>
-
-            {selectedImageUri && (
-              <View style={styles.imagePreviewWrapper}>
-                <Image source={{ uri: selectedImageUri }} style={styles.imagePreview} />
-                <TouchableOpacity
-                  style={styles.removeImageButton}
-                  onPress={() => setSelectedImageUri(null)}
-                >
-                  <Ionicons name="close-circle" size={24} color="#DC2626" />
-                </TouchableOpacity>
-              </View>
-            )}
           </View>
 
-          <TouchableOpacity
-            style={[styles.submitButton, submitting && styles.disabledButton]}
+          {/* Description & Image Card */}
+          <View style={[styles.descriptionCard, isDarkMode && styles.darkCard]}>
+             <ThemedText style={styles.cardLabel}>DETAILED DESCRIPTION</ThemedText>
+             <TextInput
+                style={[styles.descriptionInput, isDarkMode && styles.whiteText]}
+                placeholder="Provide a detailed log of the incident..."
+                placeholderTextColor={SLATE_400}
+                value={description}
+                onChangeText={setDescription}
+                multiline
+             />
+             <View style={styles.divider} />
+
+             <TouchableOpacity style={styles.proofButton} onPress={pickImage}>
+                <View style={styles.cameraIconBg}>
+                    <Ionicons name={selectedImageUri ? "checkmark-circle" : "camera"} size={18} color={PRIMARY_BLUE} />
+                </View>
+                <ThemedText style={[styles.proofText, isDarkMode && styles.whiteText]}>
+                    {selectedImageUri ? 'Proof Image Ready' : 'Attach Proof Image'}
+                </ThemedText>
+             </TouchableOpacity>
+
+             {selectedImageUri && (
+                <View style={styles.previewWrap}>
+                    <Image source={{ uri: selectedImageUri }} style={styles.previewImage} />
+                    <TouchableOpacity style={styles.removeBtn} onPress={() => setSelectedImageUri(null)}>
+                        <Ionicons name="close-circle" size={24} color="#EF4444" />
+                    </TouchableOpacity>
+                </View>
+             )}
+          </View>
+
+          {/* Submit Button */}
+          <TouchableOpacity 
+            style={[styles.commitBtn, submitting && { opacity: 0.8 }]} 
             onPress={handleSubmit}
-            activeOpacity={0.85}
             disabled={submitting}
           >
             {submitting ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color="#FFFFFF" />
-                <ThemedText style={styles.submitText}>Submitting...</ThemedText>
-              </View>
+              <ActivityIndicator color="white" />
             ) : (
-              <ThemedText style={styles.submitText}>Submit Report</ThemedText>
+              <ThemedText style={styles.commitBtnText}>COMMIT REPORT</ThemedText>
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            activeOpacity={0.8}
-            onPress={() => router.back()}
-            disabled={submitting}
-          >
-            <ThemedText style={[styles.secondaryText, isDarkMode && styles.darkSubText]}>
-              Cancel
-            </ThemedText>
+          <TouchableOpacity onPress={() => router.back()} style={styles.discardBtn}>
+            <ThemedText style={styles.discardText}>DISCARD CHANGES</ThemedText>
           </TouchableOpacity>
+
         </ScrollView>
       </SafeAreaView>
-
-      <Modal
-        visible={showSuccessModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowSuccessModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, isDarkMode && styles.darkCard]}>
-            <View style={styles.successIconWrap}>
-              <Ionicons name="checkmark-circle" size={64} color="#16A34A" />
-            </View>
-
-            <ThemedText style={[styles.modalTitle, isDarkMode && styles.darkText]}>
-              Report Submitted
-            </ThemedText>
-
-            <ThemedText style={[styles.modalMessage, isDarkMode && styles.darkSubText]}>
-              Your report has been submitted successfully.
-            </ThemedText>
-
-            <View style={[styles.reportCodeBox, isDarkMode && styles.darkInput]}>
-              <ThemedText style={[styles.reportCodeLabel, isDarkMode && styles.darkSubText]}>
-                Report Code
-              </ThemedText>
-              <ThemedText style={[styles.reportCodeValue, isDarkMode && styles.darkText]}>
-                {submittedReportCode}
-              </ThemedText>
-            </View>
-
-            <TouchableOpacity
-              style={styles.modalPrimaryButton}
-              onPress={handleViewMyReports}
-              activeOpacity={0.85}
-            >
-              <ThemedText style={styles.modalPrimaryButtonText}>
-                View My Reports
-              </ThemedText>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.modalSecondaryButton}
-              onPress={() => setShowSuccessModal(false)}
-              activeOpacity={0.8}
-            >
-              <ThemedText style={[styles.modalSecondaryButtonText, isDarkMode && styles.darkSubText]}>
-                Stay Here
-              </ThemedText>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  darkContainer: { backgroundColor: '#111827' },
-  darkCard: { backgroundColor: '#1F2937', borderColor: '#374151' },
-  darkInput: { backgroundColor: '#111827', borderColor: '#374151' },
-  darkText: { color: '#F9FAFB' },
-  darkSubText: { color: '#9CA3AF' },
-  darkDivider: { backgroundColor: '#374151' },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  darkContainer: { backgroundColor: '#0F172A' },
+  safeArea: { flex: 1, maxWidth: 1200, width: '100%', alignSelf: 'center' },
 
-  content: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    marginBottom: 24,
-  },
-
-  categoryRow: {
+  headerWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'android' ? 45 : 15,
+    paddingBottom: 15,
+    gap: 15,
+    zIndex: 10,
   },
+  
+  headerTitle: { fontSize: 22, fontWeight: '900', color: '#1E293B' },
+  backButton: { padding: 4 },
+  whiteText: { color: 'white' },
 
   categoryBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 14,
-  },
-
-  categoryValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111827',
-  },
-
-  divider: {
-    height: 1,
-    backgroundColor: '#F3F4F6',
-    marginVertical: 18,
-  },
-
-  label: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#6B7280',
-    marginBottom: 8,
-    marginTop: 8,
-  },
-
-  helperText: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 8,
-    marginBottom: 6,
-  },
-
-  input: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: '#111827',
-    marginBottom: 6,
-  },
-
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 6,
-  },
-
-  flexInput: {
-    flex: 1,
-    fontSize: 15,
-    color: '#111827',
-    marginLeft: 10,
-    minHeight: 24,
-  },
-
-  coordinatesBox: {
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 8,
-    marginTop: 8,
-  },
-
-  coordinatesText: {
-    fontSize: 14,
-    lineHeight: 22,
-  },
-
-  urgencyRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 6,
-  },
-
-  urgencyTab: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-  },
-
-  urgencyText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#6B7280',
-  },
-
-  activeUrgency: {
-    backgroundColor: '#2F70E9',
-    borderColor: '#2F70E9',
-  },
-
-  activeUrgencyText: {
-    color: '#FFFFFF',
-  },
-
-  textArea: {
-    minHeight: 150,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: '#111827',
-  },
-
-  uploadButton: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderStyle: 'dashed',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: '#FFFFFF',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
     marginTop: 4,
+    gap: 4
+  },
+  categoryBadgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
+
+  scrollArea: { paddingHorizontal: 24, paddingTop: 10, paddingBottom: 60 },
+  desktopScrollArea: { paddingHorizontal: 100 },
+
+  mapContainer: {
+    borderRadius: 28,
+    overflow: 'hidden',
+    backgroundColor: '#F1F5F9',
+    marginBottom: 25,
   },
 
-  uploadButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111827',
-  },
-
-  imagePreviewWrapper: {
-    marginTop: 12,
-    position: 'relative',
-  },
-
-  imagePreview: {
-    width: '100%',
-    height: 220,
-    borderRadius: 16,
-    resizeMode: 'cover',
-  },
-
-  removeImageButton: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 999,
-  },
-
-  submitButton: {
-    backgroundColor: '#2F70E9',
-    paddingVertical: 17,
-    borderRadius: 16,
-    alignItems: 'center',
-    shadowColor: '#2F70E9',
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-
-  disabledButton: {
-    opacity: 0.7,
-  },
-
-  submitText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 16,
-  },
-
-  secondaryButton: {
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-
-  secondaryText: {
-    color: '#4B5563',
-    fontWeight: '700',
-    fontSize: 15,
-  },
-
-  loadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-
-  modalOverlay: {
+  sectionLabel: { fontSize: 11, fontWeight: '800', color: SLATE_600, letterSpacing: 1.2, marginBottom: 12, marginLeft: 4 },
+  
+  priorityRow: { flexDirection: 'row', gap: 10, marginBottom: 25 },
+  priorityTab: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFC',
     alignItems: 'center',
-    padding: 20,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  priorityTabActive: { backgroundColor: PRIMARY_BLUE, borderColor: PRIMARY_BLUE },
+  priorityText: { fontSize: 14, fontWeight: '700', color: SLATE_400 },
+  priorityTextActive: { color: '#FFFFFF' },
+
+  inputPod: { marginBottom: 25 },
+  registryInput: {
+    backgroundColor: '#0F172A',
+    borderRadius: 18,
+    padding: 18,
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '700',
+    borderWidth: 1.5,
+    borderColor: PRIMARY_BLUE,
   },
 
-  modalCard: {
-    width: '100%',
-    maxWidth: 360,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+  descriptionCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 28,
     padding: 24,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
+    borderColor: '#F1F5F9',
   },
+  darkCard: { backgroundColor: '#1E293B', borderColor: '#334155' },
+  cardLabel: { fontSize: 10, fontWeight: '800', color: SLATE_400, letterSpacing: 0.5, marginBottom: 12 },
+  descriptionInput: { fontSize: 15, fontWeight: '500', color: '#1E293B', minHeight: 100, textAlignVertical: 'top' },
+  divider: { height: 1, backgroundColor: '#E2E8F0', marginVertical: 20 },
+  
+  proofButton: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  cameraIconBg: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' },
+  proofText: { fontSize: 14, fontWeight: '800', color: '#1E293B' },
 
-  successIconWrap: {
-    marginBottom: 12,
-  },
+  previewWrap: { marginTop: 15, borderRadius: 16, overflow: 'hidden', position: 'relative' },
+  previewImage: { width: '100%', height: 180, borderRadius: 16 },
+  removeBtn: { position: 'absolute', top: 10, right: 10, zIndex: 1 },
 
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#111827',
-    marginBottom: 8,
-    textAlign: 'center',
+  commitBtn: { 
+    backgroundColor: PRIMARY_BLUE, 
+    paddingVertical: 20, 
+    borderRadius: 22, 
+    alignItems: 'center', 
+    marginTop: 35,
+    shadowColor: PRIMARY_BLUE,
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4
   },
-
-  modalMessage: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 18,
-    lineHeight: 21,
-  },
-
-  reportCodeBox: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 14,
-    padding: 14,
-    alignItems: 'center',
-    marginBottom: 18,
-  },
-
-  reportCodeLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-
-  reportCodeValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#111827',
-  },
-
-  modalPrimaryButton: {
-    width: '100%',
-    backgroundColor: '#2F70E9',
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-
-  modalPrimaryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 15,
-  },
-
-  modalSecondaryButton: {
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-
-  modalSecondaryButtonText: {
-    color: '#4B5563',
-    fontWeight: '700',
-    fontSize: 14,
-  },
+  commitBtnText: { color: 'white', fontWeight: '900', fontSize: 15, letterSpacing: 1 },
+  discardBtn: { marginTop: 22, marginBottom: 20, alignItems: 'center' },
+  discardText: { fontSize: 12, fontWeight: '800', color: SLATE_400, letterSpacing: 1 }
 });

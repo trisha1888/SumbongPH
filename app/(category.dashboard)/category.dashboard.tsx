@@ -1,40 +1,89 @@
+import React, { useCallback } from 'react';
+import { 
+  FlatList, 
+  SafeAreaView, 
+  StyleSheet, 
+  TouchableOpacity, 
+  View, 
+  Platform,
+  useWindowDimensions 
+} from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Ionicons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router';
-import React from 'react';
-import { FlatList, SafeAreaView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../ThemeContext';
 
+// --- Constants ---
+const PRIMARY_RED = '#DC2626';
+const SLATE_500 = '#64748B';
+const SLATE_900 = '#0F172A';
+
 const CATEGORIES = [
-  { id: '1', label: 'Flood', icon: 'cloud-outline', color: '#EEF2FF', iconColor: '#4F46E5' },
-  { id: '2', label: 'Garbage', icon: 'trash-outline', color: '#F0FDF4', iconColor: '#16A34A' },
-  { id: '3', label: 'Road', icon: 'construct-outline', color: '#FFF7ED', iconColor: '#EA580C' },
-  { id: '4', label: 'Streetlight', icon: 'bulb-outline', color: '#FEFCE8', iconColor: '#CA8A04' },
-  { id: '5', label: 'Noise', icon: 'volume-high-outline', color: '#FAF5FF', iconColor: '#9333EA' },
-  { id: '6', label: 'Safety', icon: 'alert-circle-outline', color: '#FEF2F2', iconColor: '#DC2626' },
-  { id: '7', label: 'Other', icon: 'help-circle-outline', color: '#F9FAFB', iconColor: '#4B5563' },
+  { id: '1', label: 'Flood', icon: 'water', color: '#4F46E5', bg: '#EEF2FF' },
+  { id: '2', label: 'Garbage', icon: 'trash', color: '#16A34A', bg: '#F0FDF4' },
+  { id: '3', label: 'Road', icon: 'construct', color: '#EA580C', bg: '#FFF7ED' },
+  { id: '4', label: 'Streetlight', icon: 'bulb', color: '#CA8A04', bg: '#FEFCE8' },
+  { id: '5', label: 'Noise', icon: 'volume-high', color: '#9333EA', bg: '#FAF5FF' },
+  { id: '6', label: 'Safety', icon: 'shield-checkmark', color: '#DC2626', bg: '#FEF2F2' },
+  { id: '7', label: 'Fire', icon: 'flame', color: '#EF4444', bg: '#FEF2F2' },
+  { id: '8', label: 'Medical', icon: 'medical', color: '#06B6D4', bg: '#ECFEFF' },
+  { id: '9', label: 'Other', icon: 'grid', color: '#4B5563', bg: '#F9FAFB' },
 ];
 
 export default function CategoryDashboard() {
   const router = useRouter();
   const { isDarkMode } = useTheme();
+  const { width } = useWindowDimensions();
 
-  const renderCategory = ({ item }: { item: (typeof CATEGORIES)[0] }) => (
+  // Responsive logic
+  const isDesktop = width > 768;
+  const COLUMN_COUNT = isDesktop ? 5 : 3;
+  const GRID_PADDING = isDesktop ? 40 : 16;
+  const ITEM_GAP = 12;
+  
+  // Calculate card width based on current screen size
+  const cardWidth = (Math.min(width, 1200) - (GRID_PADDING * 2) - (ITEM_GAP * (COLUMN_COUNT - 1))) / COLUMN_COUNT;
+
+  const handleSelect = useCallback((item: typeof CATEGORIES[0]) => {
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    router.push({
+      pathname: '/edit-report',
+      params: { category: item.label, icon: item.icon },
+    });
+  }, [router]);
+
+  const renderCategory = ({ item }: { item: typeof CATEGORIES[0] }) => (
     <TouchableOpacity
-      style={[styles.categoryCard, isDarkMode && styles.darkCard]}
-      activeOpacity={0.85}
-      onPress={() =>
-        router.push({
-          pathname: '/edit-report',
-          params: { category: item.label },
-        })
-      }
+      style={[
+        styles.card, 
+        isDarkMode && styles.darkCard, 
+        { width: cardWidth }
+      ]}
+      activeOpacity={0.7}
+      onPress={() => handleSelect(item)}
     >
-      <View style={[styles.iconCircle, { backgroundColor: item.color }]}>
-        <Ionicons name={item.icon as any} size={28} color={item.iconColor} />
+      <View style={[
+        styles.iconContainer, 
+        { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.05)' : item.bg }
+      ]}>
+        <Ionicons 
+          name={item.icon as any} 
+          size={isDesktop ? 32 : 26} 
+          color={isDarkMode ? '#FFF' : item.color} 
+        />
+        <View style={[styles.activeDot, { backgroundColor: item.color }]} />
       </View>
-      <ThemedText style={[styles.categoryLabel, isDarkMode && styles.darkText]}>
+      
+      <ThemedText 
+        numberOfLines={1} 
+        adjustsFontSizeToFit 
+        style={[styles.label, isDarkMode && styles.darkText]}
+      >
         {item.label}
       </ThemedText>
     </TouchableOpacity>
@@ -45,81 +94,151 @@ export default function CategoryDashboard() {
       <Stack.Screen
         options={{
           headerShown: true,
-          title: 'Select Report Type',
-          headerTitleAlign: 'center',
-          headerStyle: {
-            backgroundColor: isDarkMode ? '#111827' : '#FFFFFF',
-          },
-          headerTintColor: isDarkMode ? '#F9FAFB' : '#111827',
+          title: 'REPORT CATEGORY',
+          headerTitleStyle: styles.headerTitle,
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: isDarkMode ? '#020617' : '#F8FAFC' },
+          headerTintColor: isDarkMode ? '#FFF' : SLATE_900,
         }}
       />
 
-      <SafeAreaView style={{ flex: 1 }}>
-        <View style={styles.content}>
-          <ThemedText style={[styles.title, isDarkMode && styles.darkText]}>
-            What type of issue are you reporting?
-          </ThemedText>
-
-          <FlatList
-            data={CATEGORIES}
-            keyExtractor={(item) => item.id}
-            numColumns={3}
-            renderItem={renderCategory}
-            columnWrapperStyle={styles.row}
-            contentContainerStyle={styles.grid}
-            showsVerticalScrollIndicator={false}
-          />
-        </View>
+      <SafeAreaView style={styles.safeArea}>
+        <FlatList
+          // Key prop forces a re-render when switching column counts (crucial for Web resize)
+          key={isDesktop ? 'desktop-grid' : 'mobile-grid'}
+          data={CATEGORIES}
+          renderItem={renderCategory}
+          keyExtractor={(item) => item.id}
+          numColumns={COLUMN_COUNT}
+          contentContainerStyle={[styles.listContent, { paddingHorizontal: GRID_PADDING }]}
+          columnWrapperStyle={styles.columnWrapper}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <View style={styles.headerSection}>
+              <ThemedText style={styles.kicker}>PROTOCOL INITIATION</ThemedText>
+              <ThemedText style={[styles.mainTitle, isDarkMode && styles.darkText]}>
+                Identify Incident Type
+              </ThemedText>
+            </View>
+          }
+          ListFooterComponent={
+            <View style={styles.footerInfo}>
+              <Ionicons name="information-circle-outline" size={14} color={SLATE_500} />
+              <ThemedText style={styles.footerText}>
+                Selecting a category helps us route to the correct department instantly.
+              </ThemedText>
+            </View>
+          }
+        />
       </SafeAreaView>
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  darkContainer: { backgroundColor: '#111827' },
-  content: { flex: 1, paddingHorizontal: 20, paddingTop: 20 },
-  title: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 28,
-    fontWeight: '500',
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  darkContainer: { backgroundColor: '#020617' },
+  safeArea: { 
+    flex: 1, 
+    maxWidth: 1200, // Caps the width for desktop
+    width: '100%',
+    alignSelf: 'center' 
   },
-  darkText: { color: '#F9FAFB' },
-  darkCard: {
-    backgroundColor: '#1F2937',
-    borderColor: '#374151',
+  headerTitle: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
+  
+  headerSection: {
+    paddingTop: 30,
+    marginBottom: 32,
+    alignItems: 'center'
   },
-  grid: {
-    paddingBottom: 40,
+  kicker: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: PRIMARY_RED,
+    letterSpacing: 2,
+    marginBottom: 6
   },
-  row: {
-    justifyContent: 'space-between',
-    marginBottom: 24,
+  mainTitle: {
+    fontSize: 28, // Slightly larger for desktop feel
+    fontWeight: '800',
+    color: SLATE_900,
+    textAlign: 'center'
   },
-  categoryCard: {
-    width: '30%',
+
+  listContent: {
+    paddingBottom: 60,
+    flexGrow: 1,
+  },
+  columnWrapper: {
+    justifyContent: 'flex-start',
+    gap: 12,
+    marginBottom: 12,
+  },
+  
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingVertical: 24,
+    paddingHorizontal: 8,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      web: {
+        cursor: 'pointer',
+        transition: 'transform 0.2s ease',
+      },
+      android: { elevation: 2 }
+    })
   },
-  iconCircle: {
-    width: 96,
-    height: 96,
-    borderRadius: 24,
+  darkCard: {
+    backgroundColor: '#1E293B',
+    borderColor: '#334155'
+  },
+  
+  iconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    marginBottom: 14,
+    position: 'relative'
   },
-  categoryLabel: {
-    fontSize: 16,
+  activeDot: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 6,
+    height: 6,
+    borderRadius: 3
+  },
+  
+  label: {
+    fontSize: 12,
     fontWeight: '700',
-    color: '#374151',
+    color: '#475569',
     textAlign: 'center',
+    width: '90%'
   },
+  darkText: { color: '#F1F5F9' },
+  
+  footerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 8
+  },
+  footerText: {
+    fontSize: 12,
+    color: SLATE_500,
+    fontWeight: '500',
+  }
 });

@@ -1,135 +1,96 @@
+import React from 'react';
+import { SafeAreaView, StyleSheet, TouchableOpacity, View, Platform } from 'react-native';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Ionicons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router';
-import { SafeAreaView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import MapsDashboardView from '../../components/MapsDashboardView';
 import { useTheme } from '../ThemeContext';
+
+const PRIMARY_RED = '#DC2626';
+const DARK_BG = '#020617';
 
 export default function MapDashboard() {
   const router = useRouter();
   const { isDarkMode } = useTheme();
+  
+  // --- CATCH PARAMS FROM REPORT CLICK ---
+  const params = useLocalSearchParams();
+  const targetLat = params.lat ? parseFloat(params.lat as string) : null;
+  const targetLng = params.lng ? parseFloat(params.lng as string) : null;
+
+  const navigateTo = (path: string) => {
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push(path as any);
+  };
 
   return (
     <ThemedView style={[styles.container, isDarkMode && styles.darkContainer]}>
       <Stack.Screen options={{ headerShown: false }} />
-
       <SafeAreaView style={{ flex: 1 }}>
-        
-        {/* ✅ ADDED WRAPPER TO PUSH FILTERS DOWN */}
+        {/* Adjusted paddingTop here to move content down */}
+        <View style={styles.headerTitleContainer}>
+          <ThemedText style={styles.greeting}>GEOSPATIAL VIEW</ThemedText>
+          <ThemedText style={[styles.headerTitle, isDarkMode && { color: '#FFF' }]}>Live Map</ThemedText>
+        </View>
+
         <View style={styles.mapWrapper}>
           <View style={[styles.mapCanvas, isDarkMode && styles.darkMapCanvas]}>
-            <MapsDashboardView isDarkMode={isDarkMode} />
+            {/* Pass the target coordinates to your View component */}
+            <MapsDashboardView 
+              isDarkMode={isDarkMode} 
+              targetLat={targetLat} 
+              targetLng={targetLng} 
+            />
           </View>
         </View>
 
-        {/* TAB BAR */}
-        <View style={[styles.tabBar, isDarkMode && styles.darkTabBar]}>
-          <TabIcon
-            icon="home-outline"
-            label="Home"
-            onPress={() => router.push('/(home_dasborad)/home.dashboard')}
-          />
-          <TabIcon
-            icon="document-text-outline"
-            label="Reports"
-            onPress={() => router.push('/(reports_dashboard)/reports.dashboard')}
-          />
-          <TabIcon
-            icon="map-outline"
-            label="Maps"
-            active
-            onPress={() => router.push('/(maps.dashboard)/maps.dashboard')}
-          />
-          <TabIcon
-            icon="person-outline"
-            label="Profile"
-            onPress={() => router.push('/profile')}
-          />
+        {/* --- NAVIGATION DOCK --- */}
+        <View style={[styles.navDock, isDarkMode && styles.darkCard, styles.shadow]}>
+          <NavIcon icon="home" label="Home" onPress={() => navigateTo('/(home_dasborad)/home.dashboard')} />
+          <NavIcon icon="document-text" label="Reports" onPress={() => navigateTo('/(reports_dashboard)/reports.dashboard')} />
+          <View style={{ width: 60 }} />
+          <NavIcon icon="map" label="Map" active />
+          <NavIcon icon="person" label="Profile" onPress={() => navigateTo('/profile')} />
+          
+          <TouchableOpacity 
+            style={[styles.fab, styles.shadow, isDarkMode && { borderColor: DARK_BG }]} 
+            onPress={() => {
+              if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              router.push('/category.dashboard');
+            }}
+          >
+            <Ionicons name="add" size={32} color="white" />
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     </ThemedView>
   );
 }
 
-type TabIconProps = {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  active?: boolean;
-  onPress: () => void;
-};
-
-function TabIcon({ icon, label, active, onPress }: TabIconProps) {
-  const activeIcon = active
-    ? (icon.replace('-outline', '') as keyof typeof Ionicons.glyphMap)
-    : icon;
-
-  return (
-    <TouchableOpacity style={styles.tabItem} onPress={onPress} activeOpacity={0.7}>
-      <Ionicons
-        name={activeIcon}
-        size={22}
-        color={active ? '#2F70E9' : '#9CA3AF'}
-      />
-      <ThemedText style={[styles.tabLabel, { color: active ? '#2F70E9' : '#9CA3AF' }]}>
-        {label}
-      </ThemedText>
-    </TouchableOpacity>
-  );
-}
+const NavIcon = ({ icon, label, active, onPress }: any) => (
+  <TouchableOpacity style={styles.navItem} onPress={onPress}>
+    <Ionicons name={active ? icon : `${icon}-outline`} size={22} color={active ? PRIMARY_RED : '#94A3B8'} />
+    <ThemedText style={[styles.navLabel, { color: active ? PRIMARY_RED : '#94A3B8' }]}>{label}</ThemedText>
+  </TouchableOpacity>
+);
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  darkContainer: { backgroundColor: '#111827' },
-
-  // ✅ NEW WRAPPER (moves filters down)
-  mapWrapper: {
-    flex: 1,
-    paddingTop: 25, // 🔥 THIS MOVES THE FILTER BUTTONS DOWN
-  },
-
-  mapCanvas: {
-    flex: 1,
-  },
-
-  darkMapCanvas: {
-    backgroundColor: '#0F172A',
-  },
-
-  tabBar: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 50,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 30,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-
-  darkTabBar: {
-    backgroundColor: '#1F2937',
-    borderColor: '#374151',
-  },
-
-  tabItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-
-  tabLabel: {
-    marginTop: 4,
-    fontSize: 10,
-    fontWeight: '600',
-  },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  darkContainer: { backgroundColor: DARK_BG },
+  darkCard: { backgroundColor: '#1E293B', borderColor: '#334155' },
+  // INCREASED paddingTop from 10 to 30 to move it down slightly
+  headerTitleContainer: { paddingHorizontal: 20, paddingTop: 30, zIndex: 10 },
+  greeting: { fontSize: 10, fontWeight: '900', color: PRIMARY_RED, letterSpacing: 1.5 },
+  headerTitle: { fontSize: 26, fontWeight: '900' },
+  mapWrapper: { flex: 1, paddingTop: 10 },
+  mapCanvas: { flex: 1, overflow: 'hidden' },
+  darkMapCanvas: { backgroundColor: '#0F172A' },
+  navDock: { position: 'absolute', bottom: 30, left: 16, right: 16, height: 75, backgroundColor: 'white', borderRadius: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', borderWidth: 1, borderColor: '#E2E8F0' },
+  navItem: { alignItems: 'center', justifyContent: 'center', minWidth: 50 },
+  navLabel: { fontSize: 10, fontWeight: '800', marginTop: 4 },
+  fab: { position: 'absolute', top: -32, left: '50%', marginLeft: -35, width: 70, height: 70, borderRadius: 24, backgroundColor: PRIMARY_RED, justifyContent: 'center', alignItems: 'center', borderWidth: 6, borderColor: '#F8FAFC' },
+  shadow: { ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.1, shadowRadius: 12 }, android: { elevation: 8 } }) },
 });

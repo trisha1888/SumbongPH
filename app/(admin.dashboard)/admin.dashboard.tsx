@@ -285,7 +285,14 @@ const AdminDashboard = () => {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.navBar}>
-          <Text style={styles.logo}>SumbongPH</Text>
+          {/* Logo and Name Section */}
+          <View style={styles.logoSection}>
+            <Image 
+              source={require('@/assets/images/logo.jpg')} // Ensure your logo is named logo.png in this folder
+              style={styles.logoImage}
+            />
+            <Text style={styles.logo}>SumbongPH</Text>
+          </View>
 
           {isDesktop && (
             <View style={styles.navLinks}>
@@ -413,6 +420,7 @@ const AdminDashboard = () => {
         </View>
       </ScrollView>
 
+      {/* Modals remain unchanged below... */}
       <Modal visible={notificationModalVisible} transparent animationType="fade">
         <Pressable style={styles.modalOverlay} onPress={() => setNotificationModalVisible(false)}>
           <Pressable style={styles.notificationModalCard}>
@@ -595,6 +603,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 40,
+  },
+  logoSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  logoImage: {
+    width: 32,
+    height: 32,
+    resizeMode: 'contain',
   },
   logo: {
     fontSize: 18,

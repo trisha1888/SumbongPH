@@ -10,6 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.jayrichardrala.sumbongph",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Allow SumbongPH to access your location to pin and submit reports accurately."
       }
@@ -18,12 +19,10 @@
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundImage": "./assets/images/android-icon-background.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.SumbongPH",
+      "package": "com.jayrichardrala.sumbongph",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
@@ -61,10 +60,9 @@
     ],
     "experiments": {
       "typedRoutes": true,
-      "reactCompiler": true
+      "reactCompiler": false
     },
     "extra": {
-      "router": {},
       "eas": {
         "projectId": "f6eabe63-a1bb-4c60-85f6-60124ffe3c3c"
       }

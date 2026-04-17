@@ -1,30 +1,4 @@
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { auth, db } from '@/firebaseConfig';
-import { ReportItem } from '@/models/report';
-import {
-  formatTimeAgo,
-  getCategoryIcon,
-  getPendingReportsCount,
-  getRecentReports,
-  getResolvedReportsCount,
-  getStatusStyle,
-  subscribeToMyReports,
-} from '@/services/reportService';
-import { Ionicons } from '@expo/vector-icons';
-import { Stack, useRouter } from 'expo-router';
-import {
-  addDoc,
-  collection,
-  getDocs,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  where,
-} from 'firebase/firestore';
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -33,296 +7,132 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
+  Dimensions,
+  Platform,
 } from 'react-native';
-import { useTheme } from '../ThemeContext';
+import { Stack, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { collection, onSnapshot, orderBy, query, where, Unsubscribe } from 'firebase/firestore';
+import { auth, db } from '@/firebaseConfig';
 
-type UserProfile = {
-  uid?: string;
-  name?: string;
-  email?: string;
-  mobileNumber?: string;
-  barangay?: string;
-  role?: string;
-  profilePic?: string;
+// --- Services & UI ---
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { useTheme } from '../ThemeContext'; 
+import { 
+  getStatusStyle, 
+  subscribeToMyReports,
+  getPendingReportsCount,
+  getResolvedReportsCount,
+  getCategoryIcon 
+} from '@/services/reportService';
+
+// --- Assets ---
+const logo = require('@/assets/images/logo.jpg');
+
+const { width } = Dimensions.get('window');
+
+// --- Theme Constants ---
+const PRIMARY_RED = '#DC2626';
+const SLATE_900 = '#0F172A';
+const SLATE_500 = '#64748B';
+const DARK_BG = '#020617';
+
+// --- Category Style Helper ---
+const getCategoryColors = (category: string) => {
+  const normalized = category?.toLowerCase() || 'other';
+  switch (normalized) {
+    case 'flood': return { bg: '#EEF2FF', icon: '#4F46E5', dot: '#6366F1' };
+    case 'garbage': return { bg: '#F0FDF4', icon: '#16A34A', dot: '#22C55E' };
+    case 'road': return { bg: '#FFF7ED', icon: '#EA580C', dot: '#F97316' };
+    case 'streetlight': return { bg: '#FEFCE8', icon: '#CA8A04', dot: '#EAB308' };
+    case 'noise': return { bg: '#FAF5FF', icon: '#9333EA', dot: '#A855F7' };
+    case 'safety': return { bg: '#FEF2F2', icon: '#DC2626', dot: '#EF4444' };
+    case 'fire': return { bg: '#FFF1F2', icon: '#E11D48', dot: '#F43F5E' };
+    case 'medical': return { bg: '#F0FDFA', icon: '#0D9488', dot: '#14B8A6' };
+    default: return { bg: '#F8FAFC', icon: '#475569', dot: '#64748B' };
+  }
 };
 
-type NotificationItem = {
+interface Announcement {
   id: string;
   title: string;
   message: string;
-  type?: string;
-  read?: boolean;
-  reportId?: string;
-  createdAt?: any;
-  userId?: string;
-};
-
-type AnnouncementItem = {
-  id: string;
-  title: string;
-  message: string;
-  type?: string;
-  priority?: 'normal' | 'important' | 'urgent';
   scope?: string;
-  barangay?: string;
   isPinned?: boolean;
-  isActive?: boolean;
-  createdAt?: any;
-  createdBy?: string;
-  createdByName?: string;
-};
+}
+
+interface Report {
+  id: string;
+  reportCode: string;
+  title: string;
+  category: string;
+  status: 'pending' | 'resolved' | 'in_progress';
+  description: string;
+}
 
 export default function HomeDashboard() {
   const router = useRouter();
   const { isDarkMode } = useTheme();
 
-  const [loadingProfile, setLoadingProfile] = useState(true);
-  const [loadingReports, setLoadingReports] = useState(true);
-  const [loadingNotifications, setLoadingNotifications] = useState(true);
-  const [loadingAnnouncements, setLoadingAnnouncements] = useState(true);
-
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [reports, setReports] = useState<ReportItem[]>([]);
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   useEffect(() => {
     const currentUser = auth.currentUser;
-    if (!currentUser) {
-      setLoadingProfile(false);
-      return;
-    }
+    if (!currentUser) return;
 
-    const q = query(collection(db, 'users'), where('uid', '==', currentUser.uid));
+    const unsubs: Unsubscribe[] = [];
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (!snapshot.empty) {
-        const docData = snapshot.docs[0].data();
-        setUserProfile({
-          uid: docData.uid,
-          name: docData.name || currentUser.displayName || 'User',
-          email: docData.email || currentUser.email || '',
-          mobileNumber: docData.mobileNumber || '',
-          barangay: docData.barangay || '',
-          role: docData.role || 'user',
-          profilePic: docData.profilePic || '',
-        });
-      } else {
-        setUserProfile({
-          uid: currentUser.uid,
-          name: currentUser.displayName || 'User',
-          email: currentUser.email || '',
-          mobileNumber: '',
-          barangay: '',
-          role: 'user',
-          profilePic: '',
-        });
-      }
-      setLoadingProfile(false);
-    });
+    unsubs.push(onSnapshot(query(collection(db, 'users'), where('uid', '==', currentUser.uid)), (snap) => {
+      if (!snap.empty) setUserProfile(snap.docs[0].data());
+    }));
 
-    return () => unsubscribe();
+    const unsubReports = subscribeToMyReports(
+        (data: any[]) => setReports(data as Report[]), 
+        () => setReports([])
+    );
+    unsubs.push(unsubReports);
+
+    unsubs.push(onSnapshot(query(collection(db, 'announcements'), orderBy('createdAt', 'desc')), (snap) => {
+      setAnnouncements(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Announcement)));
+      setLoading(false);
+    }));
+
+    unsubs.push(onSnapshot(query(collection(db, 'notifications'), orderBy('createdAt', 'desc')), (snap) => {
+      const filtered = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .filter(n => n.userId === currentUser.uid || n.userId === 'all');
+      setNotifications(filtered);
+    }));
+
+    return () => unsubs.forEach(unsub => unsub());
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = subscribeToMyReports(
-      (data) => {
-        setReports(data);
-        setLoadingReports(false);
-      },
-      (error) => {
-        console.log('HOME REPORT SUBSCRIPTION ERROR:', error);
-        setReports([]);
-        setLoadingReports(false);
-      }
-    );
+  const stats = useMemo(() => ({
+    pending: getPendingReportsCount(reports as any),
+    resolved: getResolvedReportsCount(reports as any),
+    unread: notifications.filter(n => !n.read).length
+  }), [reports, notifications]);
 
-    return unsubscribe;
-  }, []);
+  const recentReports = useMemo(() => 
+    reports.filter(r => r.status !== 'resolved').slice(0, 3), 
+  [reports]);
 
-  useEffect(() => {
-    const currentUser = auth.currentUser;
+  const navigateTo = useCallback((path: string) => {
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    router.push(path as any);
+  }, [router]);
 
-    if (!currentUser) {
-      setNotifications([]);
-      setLoadingNotifications(false);
-      return;
-    }
-
-    const notificationsRef = collection(db, 'notifications');
-    const notificationsQuery = query(
-      notificationsRef,
-      orderBy('createdAt', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(
-      notificationsQuery,
-      (snapshot) => {
-        const allNotifications: NotificationItem[] = snapshot.docs
-          .map((docSnap) => {
-            const data = docSnap.data();
-
-            return {
-              id: docSnap.id,
-              title: data.title || 'Notification',
-              message: data.message || '',
-              type: data.type || 'general',
-              read: data.read || false,
-              reportId: data.reportId || '',
-              createdAt: data.createdAt || null,
-              userId: data.userId || '',
-            };
-          })
-          .filter((item) => item.userId === currentUser.uid || item.userId === 'all');
-
-        setNotifications(allNotifications);
-        setLoadingNotifications(false);
-      },
-      (error) => {
-        console.log('HOME NOTIFICATIONS ERROR:', error);
-        setNotifications([]);
-        setLoadingNotifications(false);
-      }
-    );
-
-    return unsubscribe;
-  }, []);
-
-  useEffect(() => {
-    const ensureAnnouncementsCollectionExists = async () => {
-      try {
-        const announcementsRef = collection(db, 'announcements');
-        const firstDocQuery = query(announcementsRef, limit(1));
-        const snapshot = await getDocs(firstDocQuery);
-
-        if (snapshot.empty) {
-          await addDoc(announcementsRef, {
-            title: 'Welcome Announcement',
-            message: 'Important community updates from admins will appear here.',
-            type: 'general',
-            priority: 'normal',
-            scope: 'all',
-            barangay: '',
-            isPinned: true,
-            isActive: true,
-            createdBy: 'system',
-            createdByName: 'System',
-            createdAt: serverTimestamp(),
-          });
-
-          console.log('Default announcement created successfully.');
-        }
-      } catch (error) {
-        console.log('AUTO CREATE ANNOUNCEMENTS ERROR:', error);
-      }
-    };
-
-    ensureAnnouncementsCollectionExists();
-  }, []);
-
-  useEffect(() => {
-    const announcementsRef = collection(db, 'announcements');
-
-    const announcementsQuery = query(
-      announcementsRef,
-      orderBy('createdAt', 'desc')
-    );
-
-    const unsubscribe = onSnapshot(
-      announcementsQuery,
-      (snapshot) => {
-        const allAnnouncements: AnnouncementItem[] = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-
-          return {
-            id: docSnap.id,
-            title: data.title || 'Announcement',
-            message: data.message || '',
-            type: data.type || 'general',
-            priority: data.priority || 'normal',
-            scope: data.scope || 'all',
-            barangay: data.barangay || '',
-            isPinned: data.isPinned ?? false,
-            isActive: data.isActive ?? true,
-            createdAt: data.createdAt || null,
-            createdBy: data.createdBy || '',
-            createdByName: data.createdByName || 'Admin',
-          };
-        });
-
-        const filteredAnnouncements = allAnnouncements.filter((item) => {
-          if (item.isActive === false) return false;
-
-          if (!item.scope || item.scope === 'all') return true;
-
-          if (item.scope === 'barangay') {
-            const announcementBarangay = (item.barangay || '').trim().toLowerCase();
-            const userBarangay = (userProfile?.barangay || '').trim().toLowerCase();
-
-            if (!announcementBarangay || !userBarangay) return false;
-
-            return announcementBarangay === userBarangay;
-          }
-
-          return true;
-        });
-
-        filteredAnnouncements.sort((a, b) => {
-          if ((a.isPinned ?? false) && !(b.isPinned ?? false)) return -1;
-          if (!(a.isPinned ?? false) && (b.isPinned ?? false)) return 1;
-
-          const aTime = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
-          const bTime = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
-
-          return bTime - aTime;
-        });
-
-        setAnnouncements(filteredAnnouncements);
-        setLoadingAnnouncements(false);
-      },
-      (error) => {
-        console.log('HOME ANNOUNCEMENTS ERROR:', error);
-        setAnnouncements([]);
-        setLoadingAnnouncements(false);
-      }
-    );
-
-    return unsubscribe;
-  }, [userProfile?.barangay]);
-
-  const pendingCount = useMemo(() => getPendingReportsCount(reports), [reports]);
-  const resolvedCount = useMemo(() => getResolvedReportsCount(reports), [reports]);
-  const recentReports = useMemo(() => getRecentReports(reports, 3), [reports]);
-
-  const unreadNotificationsCount = useMemo(() => {
-    return notifications.filter((item) => !item.read).length;
-  }, [notifications]);
-
-  const latestAnnouncements = useMemo(() => {
-    return announcements.slice(0, 3);
-  }, [announcements]);
-
-  const getInitials = (name?: string) => {
-    if (!name) return 'U';
-    const parts = name.trim().split(' ').filter(Boolean);
-    if (parts.length === 1) {
-      return parts[0].charAt(0).toUpperCase();
-    }
-    return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
-  };
-
-  if (
-    loadingProfile ||
-    loadingReports ||
-    loadingNotifications ||
-    loadingAnnouncements
-  ) {
+  if (loading) {
     return (
-      <ThemedView style={[styles.loadingContainer, isDarkMode && styles.darkContainer]}>
-        <ActivityIndicator size="large" color="#2F70E9" />
-        <ThemedText style={[styles.loadingText, isDarkMode && styles.darkSubText]}>
-          Loading dashboard...
-        </ThemedText>
+      <ThemedView style={[styles.center, isDarkMode && styles.darkContainer]}>
+        <ActivityIndicator size="large" color={PRIMARY_RED} />
+        <ThemedText style={styles.loadingText}>INITIALIZING COMMAND CENTER...</ThemedText>
       </ThemedView>
     );
   }
@@ -330,470 +140,238 @@ export default function HomeDashboard() {
   return (
     <ThemedView style={[styles.container, isDarkMode && styles.darkContainer]}>
       <Stack.Screen options={{ headerShown: false }} />
-
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-          <View style={styles.header}>
-            <View>
-              <ThemedText style={[styles.welcomeLabel, isDarkMode && styles.darkSubText]}>
-                Welcome back,
-              </ThemedText>
-              <ThemedText style={[styles.userName, isDarkMode && styles.darkText]}>
-                {userProfile?.name || 'User'}
-              </ThemedText>
-              <ThemedText style={[styles.userBarangay, isDarkMode && styles.darkSubText]}>
-                {userProfile?.barangay || 'No barangay set'}
-              </ThemedText>
+      <SafeAreaView style={{ flex: 1 }}>
+        
+        {/* --- STICKY HEADER AREA --- */}
+        <View style={[styles.stickyHeader, isDarkMode && styles.darkContainer]}>
+          <View style={styles.topHeader}>
+            <View style={styles.brandGroup}>
+              <View style={[styles.logoContainer, isDarkMode && styles.darkCard]}>
+                <Image source={logo} style={styles.logoImage} />
+                <View style={[styles.onlinePulse, isDarkMode && { borderColor: DARK_BG }]} />
+              </View>
+              <View>
+                <ThemedText style={styles.greeting}>WELCOME</ThemedText>
+                <ThemedText style={[styles.userName, isDarkMode && { color: '#FFF' }]}>
+                    {userProfile?.name?.split(' ')[0] || 'Jay'}
+                </ThemedText>
+              </View>
             </View>
 
-            <View style={styles.headerRight}>
-              <TouchableOpacity
-                style={styles.notificationWrap}
-                onPress={() => router.push('/notifications' as any)}
-                activeOpacity={0.7}
+            <View style={styles.headerActions}>
+              <TouchableOpacity 
+                style={[styles.iconBtn, isDarkMode && styles.darkCard]} 
+                onPress={() => navigateTo('/notifications')}
               >
-                <Ionicons
-                  name="notifications-outline"
-                  size={26}
-                  color={isDarkMode ? '#F9FAFB' : '#4B5563'}
-                />
-                {unreadNotificationsCount > 0 && (
-                  <View style={styles.badgeWrap}>
-                    <ThemedText style={styles.badgeText}>
-                      {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
-                    </ThemedText>
-                  </View>
-                )}
+                <Ionicons name="notifications-outline" size={22} color={isDarkMode ? '#FFF' : SLATE_900} />
+                {stats.unread > 0 && <View style={styles.dotBadge} />}
               </TouchableOpacity>
-
-              <View style={styles.avatar}>
-                {userProfile?.profilePic ? (
-                  <Image source={{ uri: userProfile.profilePic }} style={styles.avatarImage} />
-                ) : (
-                  <ThemedText style={styles.avatarText}>{getInitials(userProfile?.name)}</ThemedText>
-                )}
-              </View>
+              <TouchableOpacity onPress={() => navigateTo('/profile')}>
+                 <Image 
+                  source={userProfile?.profilePic ? { uri: userProfile.profilePic } : logo} 
+                  style={styles.miniAvatar} 
+                />
+              </TouchableOpacity>
             </View>
           </View>
 
-          <View style={styles.statsRow}>
-            <View style={[styles.statCard, isDarkMode && styles.darkCard]}>
-              <View style={styles.statTopRow}>
-                <ThemedText style={[styles.statLabel, isDarkMode && styles.darkSubText]}>
-                  Pending
-                </ThemedText>
-                <View style={[styles.statIconWrap, { backgroundColor: '#FFF7ED' }]}>
-                  <Ionicons name="time-outline" size={18} color="#F97316" />
-                </View>
-              </View>
-              <ThemedText style={[styles.statValue, isDarkMode && styles.darkText]}>
-                {pendingCount}
-              </ThemedText>
-            </View>
-
-            <View style={[styles.statCard, isDarkMode && styles.darkCard]}>
-              <View style={styles.statTopRow}>
-                <ThemedText style={[styles.statLabel, isDarkMode && styles.darkSubText]}>
-                  Resolved
-                </ThemedText>
-                <View style={[styles.statIconWrap, { backgroundColor: '#F0FDF4' }]}>
-                  <Ionicons name="checkmark-circle-outline" size={18} color="#16A34A" />
-                </View>
-              </View>
-              <ThemedText style={[styles.statValue, isDarkMode && styles.darkText]}>
-                {resolvedCount}
-              </ThemedText>
-            </View>
+          <View style={styles.statsGrid}>
+            <StatBox label="ACTIVE" value={stats.pending} icon="alert-circle" color={PRIMARY_RED} bg="#FEE2E2" isDarkMode={isDarkMode} />
+            <StatBox label="RESOLVED" value={stats.resolved} icon="shield-checkmark" color="#16A34A" bg="#DCFCE7" isDarkMode={isDarkMode} />
+            <StatBox label="SECTOR" value={userProfile?.barangay ? '1' : '1'} icon="apps" color="#2563EB" bg="#DBEAFE" isDarkMode={isDarkMode} />
           </View>
+        </View>
 
-          <View style={styles.sectionHeader}>
-            <ThemedText style={[styles.sectionTitle, isDarkMode && styles.darkText]}>
-              Announcements
-            </ThemedText>
-            <TouchableOpacity
-              onPress={() => router.push('/users.announcement' as any)}
-            >
-              <ThemedText style={styles.viewAll}>View All</ThemedText>
-            </TouchableOpacity>
-          </View>
-
-          <ThemedText style={[styles.sectionSubtext, isDarkMode && styles.darkSubText]}>
-            Latest community and barangay updates.
-          </ThemedText>
-
-          {latestAnnouncements.length === 0 ? (
-            <View style={[styles.emptyCard, isDarkMode && styles.darkCard]}>
-              <Ionicons name="megaphone-outline" size={24} color="#9CA3AF" />
-              <ThemedText style={[styles.emptyTitle, isDarkMode && styles.darkText]}>
-                No announcements yet
-              </ThemedText>
-              <ThemedText style={[styles.emptyText, isDarkMode && styles.darkSubText]}>
-                Important updates from admins will appear here.
-              </ThemedText>
-            </View>
-          ) : (
-            latestAnnouncements.map((announcement) => (
-              <AnnouncementCard key={announcement.id} announcement={announcement} />
+        {/* --- SCROLLABLE CONTENT --- */}
+        <ScrollView 
+          showsVerticalScrollIndicator={false} 
+          contentContainerStyle={styles.scrollContent}
+        >
+          <SectionHead title="ANNOUNCEMENTS" onAction={() => navigateTo('/users.announcement')} />
+          {announcements.length > 0 ? (
+            announcements.slice(0, 2).map((ann) => (
+              <AnnouncementItem key={ann.id} ann={ann} isDarkMode={isDarkMode} />
             ))
-          )}
-
-          <View style={styles.sectionHeader}>
-            <ThemedText style={[styles.sectionTitle, isDarkMode && styles.darkText]}>
-              Recent Reports
-            </ThemedText>
-            <TouchableOpacity onPress={() => router.push('/(reports_dashboard)/reports.dashboard')}>
-              <ThemedText style={styles.viewAll}>View All</ThemedText>
-            </TouchableOpacity>
-          </View>
-
-          <ThemedText style={[styles.sectionSubtext, isDarkMode && styles.darkSubText]}>
-            Shows only unresolved reports from the last 3 days.
-          </ThemedText>
-
-          {recentReports.length === 0 ? (
-            <View style={[styles.emptyCard, isDarkMode && styles.darkCard]}>
-              <Ionicons name="document-text-outline" size={24} color="#9CA3AF" />
-              <ThemedText style={[styles.emptyTitle, isDarkMode && styles.darkText]}>
-                No recent reports
-              </ThemedText>
-              <ThemedText style={[styles.emptyText, isDarkMode && styles.darkSubText]}>
-                Reports disappear here once they are resolved or older than 3 days.
-              </ThemedText>
-            </View>
           ) : (
-            recentReports.map((report) => <RecentReportCard key={report.id} report={report} />)
+            <ThemedText style={styles.emptySubText}>No recent announcements.</ThemedText>
           )}
+
+          <View style={{ marginTop: 24 }}>
+            <SectionHead title="Recent Reports" onAction={() => navigateTo('/(reports_dashboard)/reports.dashboard')} />
+            {recentReports.length === 0 ? (
+              <EmptyState isDarkMode={isDarkMode} />
+            ) : (
+              recentReports.map((report) => (
+                <ReportCard key={report.id} report={report} isDarkMode={isDarkMode} />
+              ))
+            )}
+          </View>
         </ScrollView>
 
-        <TouchableOpacity
-          style={styles.fab}
-          activeOpacity={0.85}
-          onPress={() => router.push('/category.dashboard')}
-        >
-          <Ionicons name="add" size={30} color="#FFFFFF" />
-        </TouchableOpacity>
-
-        <View style={[styles.tabBar, isDarkMode && styles.darkCard]}>
-          <TabIcon
-            icon="home-outline"
-            label="Home"
-            active
-            onPress={() => router.push('/(home_dasborad)/home.dashboard')}
-          />
-          <TabIcon
-            icon="document-text-outline"
-            label="Reports"
-            onPress={() => router.push('/(reports_dashboard)/reports.dashboard')}
-          />
-          <TabIcon
-            icon="map-outline"
-            label="Maps"
-            onPress={() => router.push('/(maps.dashboard)/maps.dashboard')}
-          />
-          <TabIcon
-            icon="person-outline"
-            label="Profile"
-            onPress={() => router.push('/profile')}
-          />
+        {/* --- NAVIGATION DOCK --- */}
+        <View style={[styles.navDock, isDarkMode && styles.darkCard, styles.shadow]}>
+          <NavIcon icon="home" label="Home" active />
+          <NavIcon icon="document-text" label="Reports" onPress={() => navigateTo('/(reports_dashboard)/reports.dashboard')} />
+          <View style={{ width: 60 }} />
+          <NavIcon icon="map" label="Map" onPress={() => navigateTo('/(maps.dashboard)/maps.dashboard')} />
+          <NavIcon icon="person" label="Profile" onPress={() => navigateTo('/profile')} />
+          
+          <TouchableOpacity 
+            style={[styles.fab, styles.shadow, isDarkMode && { borderColor: DARK_BG }]} 
+            activeOpacity={0.8}
+            onPress={() => {
+              if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              router.push('/category.dashboard');
+            }}
+          >
+            <Ionicons name="add" size={32} color="white" />
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     </ThemedView>
   );
 }
 
-function AnnouncementCard({ announcement }: { announcement: AnnouncementItem }) {
-  const { isDarkMode } = useTheme();
-
-  return (
-    <View style={[styles.reportCard, isDarkMode && styles.darkCard]}>
-      <View style={styles.reportTopRow}>
-        <View style={styles.reportLeftRow}>
-          <View style={[styles.reportIconWrap, { backgroundColor: '#EFF6FF' }]}>
-            <Ionicons name="megaphone-outline" size={22} color="#2563EB" />
-          </View>
-
-          <View style={styles.reportTextWrap}>
-            <ThemedText style={[styles.reportTitle, isDarkMode && styles.darkText]} numberOfLines={1}>
-              {announcement.title}
-            </ThemedText>
-            <ThemedText style={[styles.reportCode, isDarkMode && styles.darkSubText]}>
-              {announcement.scope === 'barangay'
-                ? announcement.barangay || 'Barangay Announcement'
-                : 'Public Announcement'}
-            </ThemedText>
-          </View>
-        </View>
-
-        {announcement.isPinned ? (
-          <View style={[styles.statusBadge, { backgroundColor: '#DBEAFE' }]}>
-            <ThemedText style={[styles.statusText, { color: '#1D4ED8' }]}>
-              PINNED
-            </ThemedText>
-          </View>
-        ) : null}
-      </View>
-
-      <ThemedText style={[styles.reportDescription, isDarkMode && styles.darkSubText]} numberOfLines={3}>
-        {announcement.message}
-      </ThemedText>
+// --- Internal Components ---
+const StatBox = ({ label, value, icon, color, bg, isDarkMode }: any) => (
+  <View style={[styles.statBox, isDarkMode && styles.darkCard]}>
+    <View style={[styles.statIconWrap, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.1)' : bg }]}>
+      <Ionicons name={icon} size={18} color={isDarkMode ? '#FFF' : color} />
     </View>
-  );
-}
+    <ThemedText style={[styles.statNum, isDarkMode && { color: '#FFF' }]}>{value}</ThemedText>
+    <ThemedText style={styles.statLabel}>{label}</ThemedText>
+  </View>
+);
 
-function RecentReportCard({ report }: { report: ReportItem }) {
-  const { isDarkMode } = useTheme();
-  const statusStyle = getStatusStyle(report.status);
-
-  return (
-    <View style={[styles.reportCard, isDarkMode && styles.darkCard]}>
-      <View style={styles.reportTopRow}>
-        <View style={styles.reportLeftRow}>
-          <View style={styles.reportIconWrap}>
-            <Ionicons name={getCategoryIcon(report.category) as any} size={22} color="#4B5563" />
-          </View>
-
-          <View style={styles.reportTextWrap}>
-            <ThemedText style={[styles.reportTitle, isDarkMode && styles.darkText]} numberOfLines={1}>
-              {report.title}
-            </ThemedText>
-            <ThemedText style={[styles.reportCode, isDarkMode && styles.darkSubText]}>
-              {report.reportCode}
-            </ThemedText>
-          </View>
-        </View>
-
-        <View style={[styles.statusBadge, { backgroundColor: statusStyle.backgroundColor }]}>
-          <ThemedText style={[styles.statusText, { color: statusStyle.color }]}>
-            {statusStyle.label}
-          </ThemedText>
-        </View>
-      </View>
-
-      <ThemedText style={[styles.reportDescription, isDarkMode && styles.darkSubText]} numberOfLines={2}>
-        {report.description}
-      </ThemedText>
-
-      <View style={styles.reportFooter}>
-        <View style={styles.footerItem}>
-          <Ionicons name="location-outline" size={14} color="#9CA3AF" />
-          <ThemedText style={[styles.footerText, isDarkMode && styles.darkSubText]} numberOfLines={1}>
-            {report.location}
-          </ThemedText>
-        </View>
-
-        <View style={styles.footerItem}>
-          <Ionicons name="time-outline" size={14} color="#9CA3AF" />
-          <ThemedText style={[styles.footerText, isDarkMode && styles.darkSubText]}>
-            {formatTimeAgo(report)}
-          </ThemedText>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function TabIcon({
-  icon,
-  label,
-  active = false,
-  onPress,
-}: {
-  icon: any;
-  label: string;
-  active?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity style={styles.tabItem} onPress={onPress} activeOpacity={0.7}>
-      <Ionicons
-        name={active ? (icon as string).replace('-outline', '') : icon}
-        size={22}
-        color={active ? '#2F70E9' : '#9CA3AF'}
-      />
-      <ThemedText style={[styles.tabLabel, { color: active ? '#2F70E9' : '#9CA3AF' }]}>
-        {label}
-      </ThemedText>
+const SectionHead = ({ title, onAction }: any) => (
+  <View style={styles.sectionHeader}>
+    <ThemedText style={styles.sectionTitle}>{title.toUpperCase()}</ThemedText>
+    <TouchableOpacity onPress={onAction} hitSlop={15}>
+      <ThemedText style={styles.viewAll}>SEE ALL</ThemedText>
     </TouchableOpacity>
+  </View>
+);
+
+const AnnouncementItem = ({ ann, isDarkMode }: any) => (
+  <View style={[styles.announcementCard, isDarkMode && styles.darkCard]}>
+    <View style={styles.annHeader}>
+      <ThemedText style={[styles.annTag, isDarkMode && { backgroundColor: '#334155', color: '#CBD5E1' }]}>
+        {ann.scope?.toUpperCase() || 'ALL'}
+      </ThemedText>
+      <Ionicons name="pin" size={14} color={ann.isPinned ? PRIMARY_RED : 'transparent'} />
+    </View>
+    <ThemedText style={[styles.annTitle, isDarkMode && { color: '#FFF' }]}>{ann.title}</ThemedText>
+    <ThemedText numberOfLines={2} style={[styles.annBody, isDarkMode && { color: '#94A3B8' }]}>{ann.message}</ThemedText>
+  </View>
+);
+
+const ReportCard = ({ report, isDarkMode }: { report: Report, isDarkMode: boolean }) => {
+  const status = getStatusStyle(report.status);
+  const catColors = getCategoryColors(report.category);
+
+  return (
+    <View style={[styles.reportItem, isDarkMode && styles.darkCard]}>
+      <View style={[styles.categoryLogoTile, { backgroundColor: catColors.bg }]}>
+         <Ionicons name={getCategoryIcon(report.category) as any} size={20} color={catColors.icon} />
+          <View style={[styles.statusDot, { backgroundColor: catColors.dot }]} />
+      </View>
+      <View style={styles.reportContent}>
+        <View style={styles.reportRow}>
+          <ThemedText style={styles.reportCode}>#{report.reportCode}</ThemedText>
+          <ThemedText style={[styles.statusText, { color: status.color }]}>{status.label}</ThemedText>
+        </View>
+        <ThemedText style={[styles.reportTitle, isDarkMode && { color: '#FFF' }]}>{report.title}</ThemedText>
+        <ThemedText numberOfLines={1} style={[styles.reportDesc, isDarkMode && { color: '#64748B' }]}>{report.description}</ThemedText>
+      </View>
+    </View>
   );
-}
+};
+
+const NavIcon = ({ icon, label, active, onPress }: any) => (
+  <TouchableOpacity style={styles.navItem} onPress={onPress}>
+    <Ionicons name={active ? icon : `${icon}-outline`} size={22} color={active ? PRIMARY_RED : '#94A3B8'} />
+    <ThemedText style={[styles.navLabel, { color: active ? PRIMARY_RED : '#94A3B8' }]}>{label}</ThemedText>
+  </TouchableOpacity>
+);
+
+const EmptyState = ({ isDarkMode }: any) => (
+  <View style={[styles.emptyContainer, isDarkMode && { backgroundColor: '#1E293B', borderColor: '#334155' }]}>
+    <Ionicons name="shield-checkmark" size={40} color={isDarkMode ? '#475569' : '#CBD5E1'} />
+    <ThemedText style={[styles.emptyTitle, isDarkMode && { color: '#F1F5F9' }]}>All Sectors Clear</ThemedText>
+    <ThemedText style={styles.emptySubText}>No active incidents detected at this time.</ThemedText>
+  </View>
+);
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  darkContainer: { backgroundColor: '#111827' },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-  },
-  loadingText: { marginTop: 12, fontSize: 14, color: '#6B7280' },
-  darkCard: { backgroundColor: '#1F2937', borderColor: '#374151' },
-  darkText: { color: '#F9FAFB' },
-  darkSubText: { color: '#9CA3AF' },
-  safeArea: { flex: 1 },
-
-  scrollContent: {
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  darkContainer: { backgroundColor: DARK_BG },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 15, fontSize: 10, fontWeight: '900', color: SLATE_500, letterSpacing: 2 },
+  
+  // Adjusted: padding increased to shift everything down toward the content
+  stickyHeader: {
     paddingHorizontal: 20,
-    paddingTop: 45,
-    paddingBottom: 120,
+    paddingTop: 50, 
+    paddingBottom: 20,
+    zIndex: 10,
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.03)',
+  },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 15, paddingBottom: 140 },
+  
+  darkCard: { backgroundColor: '#1E293B', borderColor: '#334155' },
+  shadow: {
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.1, shadowRadius: 12 },
+      android: { elevation: 8 },
+    }),
   },
 
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  welcomeLabel: { fontSize: 14, color: '#6B7280' },
-  userName: { fontSize: 28, fontWeight: '700', color: '#111827', marginTop: 2 },
-  userBarangay: { fontSize: 13, color: '#6B7280', marginTop: 2 },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  notificationWrap: {
-    position: 'relative',
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeWrap: {
-    position: 'absolute',
-    top: -2,
-    right: -4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#EF4444',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  badgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
-  avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#2F70E9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  avatarImage: { width: 42, height: 42, borderRadius: 21 },
-  avatarText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-  statsRow: { flexDirection: 'row', gap: 14, marginBottom: 22 },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 18,
-    padding: 16,
-  },
-  statTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  statLabel: { fontSize: 14, color: '#6B7280' },
-  statIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  statValue: { fontSize: 30, fontWeight: '700', color: '#111827', marginTop: 12 },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sectionTitle: { fontSize: 22, fontWeight: '700', color: '#111827' },
-  sectionSubtext: { marginTop: 6, marginBottom: 14, fontSize: 13, color: '#6B7280' },
-  viewAll: { color: '#2F70E9', fontSize: 14, fontWeight: '700' },
-  emptyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 22,
-  },
-  emptyTitle: { marginTop: 12, fontSize: 18, fontWeight: '700', color: '#111827' },
-  emptyText: {
-    marginTop: 8,
-    fontSize: 13,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 19,
-  },
-  reportCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
-  },
-  reportTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  reportLeftRow: { flexDirection: 'row', flex: 1, alignItems: 'center' },
-  reportIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  reportTextWrap: { flex: 1, marginLeft: 12 },
-  reportTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
-  reportCode: { marginTop: 4, fontSize: 12, color: '#6B7280' },
-  statusBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  statusText: { fontSize: 11, fontWeight: '700' },
-  reportDescription: { marginTop: 14, fontSize: 14, lineHeight: 20, color: '#6B7280' },
-  reportFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 14,
-  },
-  footerItem: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 6 },
-  footerText: { fontSize: 12, color: '#6B7280', flex: 1 },
+  topHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  brandGroup: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  logoContainer: { width: 56, height: 56, borderRadius: 18, backgroundColor: 'white', padding: 2, justifyContent: 'center', alignItems: 'center' },
+  logoImage: { width: '100%', height: '100%', borderRadius: 16 },
+  onlinePulse: { position: 'absolute', bottom: 0, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: '#22C55E', borderWidth: 2, borderColor: '#F8FAFC' },
+  greeting: { fontSize: 10, fontWeight: '900', color: SLATE_500, letterSpacing: 1.5 },
+  userName: { fontSize: 24, fontWeight: '900', color: SLATE_900 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  iconBtn: { width: 46, height: 46, borderRadius: 15, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+  miniAvatar: { width: 46, height: 46, borderRadius: 15, borderWidth: 2, borderColor: PRIMARY_RED },
+  dotBadge: { position: 'absolute', top: 12, right: 12, width: 8, height: 8, borderRadius: 4, backgroundColor: PRIMARY_RED, borderWidth: 1.5, borderColor: 'white' },
 
-  fab: {
-    position: 'absolute',
-    right: 20,
-    bottom: 150,
-    width: 45,
-    height: 45,
-    borderRadius: 28,
-    backgroundColor: '#2F70E9',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 8,
-  },
+  statsGrid: { flexDirection: 'row', gap: 12, marginBottom: 5 },
+  statBox: { flex: 1, backgroundColor: 'white', padding: 16, borderRadius: 24, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
+  statIconWrap: { width: 36, height: 36, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  statNum: { fontSize: 22, fontWeight: '900', color: SLATE_900 },
+  statLabel: { fontSize: 9, fontWeight: '800', color: SLATE_500 },
 
-  tabBar: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 50,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 30,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  tabItem: { alignItems: 'center', flex: 1 },
-  tabLabel: { marginTop: 4, fontSize: 10, fontWeight: '600' },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  sectionTitle: { fontSize: 13, fontWeight: '900', color: SLATE_500, letterSpacing: 1 },
+  viewAll: { fontSize: 11, fontWeight: '900', color: PRIMARY_RED },
+
+  announcementCard: { backgroundColor: 'white', padding: 20, borderRadius: 24, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+  annHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  annTag: { fontSize: 9, fontWeight: '900', color: SLATE_500, backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  annTitle: { fontSize: 17, fontWeight: '800', color: SLATE_900, marginBottom: 4 },
+  annBody: { fontSize: 14, color: '#475569', lineHeight: 20 },
+
+  reportItem: { backgroundColor: 'white', borderRadius: 24, marginBottom: 12, flexDirection: 'row', alignItems: 'center', padding: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+  categoryLogoTile: { width: 52, height: 52, borderRadius: 16, justifyContent: 'center', alignItems: 'center', position: 'relative' },
+  statusDot: { position: 'absolute', top: 5, right: 5, width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: '#FFFFFF' },
+  reportContent: { flex: 1, marginLeft: 14 },
+  reportRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  reportCode: { fontSize: 10, fontWeight: '700', color: SLATE_500 },
+  statusText: { fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  reportTitle: { fontSize: 16, fontWeight: '800', color: SLATE_900, marginBottom: 2 },
+  reportDesc: { fontSize: 13, color: '#64748B' },
+
+  emptyContainer: { padding: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F1F5F9', borderRadius: 24, borderStyle: 'dashed', borderWidth: 2, borderColor: '#CBD5E1' },
+  emptyTitle: { fontSize: 16, fontWeight: '800', color: SLATE_900, marginTop: 10 },
+  emptySubText: { fontSize: 13, color: '#94A3B8', marginTop: 4 },
+
+  navDock: { position: 'absolute', bottom: 30, left: 16, right: 16, height: 75, backgroundColor: 'white', borderRadius: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', borderWidth: 1, borderColor: '#E2E8F0' },
+  navItem: { alignItems: 'center', justifyContent: 'center', minWidth: 50 },
+  navLabel: { fontSize: 10, fontWeight: '800', marginTop: 4 },
+  fab: { position: 'absolute', top: -32, left: '50%', marginLeft: -35, width: 70, height: 70, borderRadius: 24, backgroundColor: PRIMARY_RED, justifyContent: 'center', alignItems: 'center', borderWidth: 6, borderColor: '#F8FAFC' }
 });

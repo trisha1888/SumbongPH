@@ -21,7 +21,7 @@ import {
 import React, { useState } from 'react';
 
 import {
-  Linking, // <--- Add this line here
+  Linking, 
   Platform,
   SafeAreaView,
   ScrollView,
@@ -35,6 +35,12 @@ import {
 const HelpAndSupport = () => {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'started' | 'faq' | 'contact'>('started');
+
+  // Function to handle phone calls
+  const handleCall = (number: string) => {
+    const cleanNumber = number.replace(/[-() ]/g, '');
+    Linking.openURL(`tel:${cleanNumber}`);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -188,24 +194,6 @@ const HelpAndSupport = () => {
               </View>
             </FAQItem>
 
-            <FAQItem question="Can I edit or withdraw a complaint after submitting?">
-              <Text style={styles.answerText}>
-                You can add additional information or photos to an existing complaint, but you cannot edit the original submission. To withdraw a complaint, contact the barangay office directly or use the "Contact Barangay" feature.
-              </Text>
-            </FAQItem>
-
-            <FAQItem question="What types of issues can I report?">
-              <Text style={styles.answerText}>
-                You can report: Noise disturbances, Infrastructure problems (roads, drainage, streetlights), Sanitation issues (garbage, flooding), Public safety concerns, Neighbor disputes, and other community issues. For emergencies, please call 122 directly.
-              </Text>
-            </FAQItem>
-
-            <FAQItem question="How do I get notified about updates?">
-              <Text style={styles.answerText}>
-                You will receive push notifications on your device whenever there is an update to your report. You can also check the "Alerts" tab within the app to see a history of all status changes and official comments.
-              </Text>
-            </FAQItem>
-
             <View style={styles.footer}>
               <Text style={styles.footerText}>Can't find what you're looking for?</Text>
               <TouchableOpacity onPress={() => setActiveTab('contact')}>
@@ -225,6 +213,7 @@ const HelpAndSupport = () => {
                 icon={<Phone size={20} color="#3b82f6" />} 
                 label="Hotline" 
                 value="8-9212-796" 
+                onPress={() => handleCall('8-9212-796')}
               />
               <ContactRow 
                 icon={<Mail size={20} color="#3b82f6" />} 
@@ -248,21 +237,21 @@ const HelpAndSupport = () => {
               </View>
             </View>
 
-            <HotlineCard label="National Emergency" number="911" color="#ef4444" />
-            <HotlineCard label="Barangay Tanod" number="0917-123-4567" color="#f59e0b" />
-            <HotlineCard label="Fire Department" number="(02) 8911-1111" color="#f97316" />
+            <HotlineCard label="National Emergency" number="911" color="#ef4444" onPress={() => handleCall('911')} />
+            <HotlineCard label="Barangay Tanod" number="0917-123-4567" color="#f59e0b" onPress={() => handleCall('09171234567')} />
+            <HotlineCard label="Fire Department" number="(02) 8911-1111" color="#f97316" onPress={() => handleCall('(02) 8911-1111')} />
 
-<View style={styles.socialSection}>
-  <Text style={styles.socialTitle}>Follow Our Page</Text>
-  <TouchableOpacity 
-    style={styles.socialButton}
-    activeOpacity={0.8}
-    onPress={() => Linking.openURL('https://quezoncity.gov.ph/brgy-directory/mangga/')}
-  >
-    <Globe size={18} color="#fff" />
-    <Text style={styles.socialButtonText}>Visit Official Website</Text>
-  </TouchableOpacity>
-</View>
+            <View style={styles.socialSection}>
+              <Text style={styles.socialTitle}>Follow Our Page</Text>
+              <TouchableOpacity 
+                style={styles.socialButton}
+                activeOpacity={0.8}
+                onPress={() => Linking.openURL('https://quezoncity.gov.ph/brgy-directory/mangga/')}
+              >
+                <Globe size={18} color="#fff" />
+                <Text style={styles.socialButtonText}>Visit Official Website</Text>
+              </TouchableOpacity>
+            </View>
           </>
         )}
       </ScrollView>
@@ -270,22 +259,29 @@ const HelpAndSupport = () => {
   );
 };
 
-// --- Helper Components & Styles remain the same ---
-const ContactRow = ({ icon, label, value }: any) => (
-  <View style={styles.contactRow}>
+// --- Helper Components ---
+const ContactRow = ({ icon, label, value, onPress }: any) => (
+  <TouchableOpacity 
+    style={styles.contactRow} 
+    onPress={onPress} 
+    disabled={!onPress}
+  >
     <View style={styles.contactIcon}>{icon}</View>
     <View>
       <Text style={styles.contactLabel}>{label}</Text>
       <Text style={styles.contactValue}>{value}</Text>
     </View>
-  </View>
+  </TouchableOpacity>
 );
 
-const HotlineCard = ({ label, number, color }: any) => (
-  <View style={[styles.hotlineCard, { borderColor: color + '33' }]}>
+const HotlineCard = ({ label, number, color, onPress }: any) => (
+  <TouchableOpacity 
+    style={[styles.hotlineCard, { borderColor: color + '33' }]}
+    onPress={onPress}
+  >
     <Text style={styles.hotlineLabel}>{label}</Text>
     <Text style={[styles.hotlineNumber, { color }]}>{number}</Text>
-  </View>
+  </TouchableOpacity>
 );
 
 const StepItem = ({ step, title, description, icon }: any) => (
