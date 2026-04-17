@@ -2,12 +2,13 @@
   "expo": {
     "name": "SumbongPH",
     "slug": "SumbongPH",
+    "owner": "trish0618",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "sumbongph",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.jayrichardrala.sumbongph",
@@ -25,11 +26,13 @@
       "package": "com.jayrichardrala.sumbongph",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyAXhUb4bxSE0Lu4UoFExnyoFmU2fr7oW8E"
+          "apiKey": "PASTE_YOUR_REAL_GOOGLE_MAPS_API_KEY_HERE"
         }
       }
     },
@@ -42,7 +45,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -67,7 +70,6 @@
       "eas": {
         "projectId": "6e6bf20f-56a5-4fb2-b592-6344107a2554"
       }
-    },
-    "owner": "trish0618"
+    }
   }
 }
